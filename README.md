@@ -1,0 +1,154 @@
+# ❄️ Frost Breakout
+
+A neon-frost reimagining of the classic **Breakout** arcade game, built with
+**HTML5 Canvas + CSS3 + Vanilla JavaScript**. No frameworks, no build step, no
+dependencies.
+
+> *A futuristic frozen arcade machine at the edge of the arctic.*
+
+![no build step](https://img.shields.io/badge/build-none-57e6ff) ![no dependencies](https://img.shields.io/badge/deps-0-9d7cff) ![license](https://img.shields.io/badge/license-MIT-ffd479)
+
+---
+
+## ▶ Play
+
+**Option 1 — just open it.** Double-click `index.html` (or drag it into a
+browser). Everything works: gameplay, effects, and sound via the built-in
+synth. The only difference is that browsers refuse to `fetch()` local files
+over `file://`, so the game skips the optional WAV samples and uses its
+synthesised voices instead.
+
+**Option 2 — serve it (recommended).** Gives you the authored WAV samples:
+
+```bash
+cd frost-breakout
+node tools/serve.mjs          # -> http://localhost:8080
+node tools/serve.mjs 3000     # or pick your own port
+```
+
+No install needed — `tools/serve.mjs` is a dependency-free static server that
+binds all interfaces and prints both the localhost and LAN URLs. `npx serve .`
+or `python -m http.server 8000` work just as well.
+
+### 📱 Playing on your phone
+
+Keep the server running and, with the phone on the **same Wi-Fi network**,
+open the printed LAN URL (e.g. `http://192.168.1.20:8080`).
+
+- The server must stay open — closing the terminal stops it.
+- If the page won't load, the port is likely blocked by the firewall; allow
+  Node.js through on your network profile.
+- Phones block "insecure" mixed content, so use `http://`, not `https://`.
+- On-screen controls appear automatically at phone widths; drag anywhere on
+  the arena to move the paddle, tap to launch.
+
+## 🎮 Controls
+
+| Action                | Keyboard                        | Touch / Mouse                    |
+| --------------------- | ------------------------------- | -------------------------------- |
+| Move paddle           | `←` `→` or `A` `D`              | drag anywhere on the arena       |
+| Launch / confirm      | `Space` / `Enter`                | tap the arena, or the ❄️ button  |
+| Pause / resume        | `P` or `Esc`                    | ❚❚ button                        |
+| Restart               | `R`                             | ↻ button                         |
+| Mute / unmute         | `M`                             | 🔊 button                        |
+
+On phones and tablets an on-screen control bar appears automatically.
+
+## ✨ Features
+
+**Gameplay**
+
+- 8 hand-tuned levels, each with its own silhouette (shelf → pyramid → tides →
+  fortress → diamond core → aurora cross → cathedral → finale)
+- 5 block types: glacier (1 hit), frost (2), pack ice (3), ember (2, violet
+  cracks), bedrock (indestructible) — all with procedural crack generation
+- Ball speed, drop rates and brick toughness scale per level
+- 5 power-ups: ❄️ Multi Ball · 🧊 Wide Paddle · ⚡ Frost Dash · 💎 Bonus Score ·
+  🛡️ Frost Shield (absorbs one fall)
+- Combo multiplier (up to ×5) for chaining blocks without touching the paddle
+- 3 lives, per-level clear bonus, persistent best score in `localStorage`
+- Game states: start screen → playing → pause → level clear → victory / game over
+
+**Presentation**
+
+- Dark arctic palette with breathing aurora, starfield, hex frost lattice and
+  distant ice ridges
+- Parallax snow, drifting background crystals, arena icicles that shimmer,
+  pulsing frost corners and cold floor mist
+- Frost-shaded paddle with travelling energy line, end-cap glow and frost spikes
+- Ice sphere with faceted shell, specular highlight and additive frost trail
+- Translucent blocks with glowing edges, animated sheen sweep and hit flashes
+- Shatter bursts: crystal shards, sparks, mist, expanding rings, glints,
+  floating score text
+- Screen shake, colour flashes, camera-ready CRT/scanline overlay
+- Fully responsive, DPI-aware rendering (`devicePixelRatio` up to 2.5×)
+
+**Audio**
+
+- 10 procedurally synthesised effects (WebAudio) *and* optional WAV samples in
+  `assets/sounds/` — the engine prefers samples, falls back to synthesis
+- Mute/unmute button, persisted choice, master gain through a compressor
+
+## 📁 Project structure
+
+```
+frost-breakout/
+├── index.html              # markup + HUD + overlay screens
+├── style.css               # tokens, layout, panels, responsive rules
+├── script.js               # engine: audio, entities, physics, renderer, input
+├── tools/
+│   ├── serve.mjs            # dependency-free local static server
+│   └── generate-sounds.mjs  # dependency-free WAV generator
+└── assets/
+    ├── sounds/             # 10 generated .wav effects (+ README)
+    └── images/             # intentionally empty — everything is drawn (+ README)
+```
+
+## 🧩 How `script.js` is organised
+
+| Section | Responsibility |
+| ------- | -------------- |
+| 00 · Utilities | math helpers, seeded PRNG, rounded-rect paths |
+| 01 · Renderer bootstrap | logical resolution, DPR scaling, cached glow sprites |
+| 02 · Audio engine | WebAudio synth + optional WAV loader + mute |
+| 03 · Game data | brick types, power-ups, 8 level blueprints, layout masks |
+| 04 · Entities | `Ball`, `Paddle`, `Brick`, `PowerUp`, particle emitters |
+| 05 · World | state machine, level generation, scoring |
+| 06 · Simulation | sub-stepped ball physics, collision resolution, rules |
+| 07 · Rendering | background → arena → entities → effects → prompts |
+| 08 · Input | keyboard, pointer, on-screen touch controls |
+| 09 · UI glue | HUD sync, overlays, game loop, boot |
+
+A few implementation notes:
+
+- **Tunnelling-proof physics** — each ball is integrated in sub-steps capped at
+  `radius × 0.72`, so nothing squeezes through thin geometry at high speed.
+- **Resolution independence** — the game always simulates in a fixed
+  `960 × 640` space; the canvas is only scaled for display, so layouts are
+  identical on a 4K monitor and a phone.
+- **Cheap glow** — radial gradients are pre-rendered into cached sprite canvases
+  and composited with `lighter`, instead of paying for `shadowBlur` per frame.
+- **Static backdrop cache** — the gradient/stars/lattice/ridges are painted once
+  per resize into an offscreen canvas; only snow and aurora redraw per frame.
+
+## ✏️ Tweaking
+
+Everything fun lives at the top of `script.js`:
+
+```js
+const W = 960, H = 640;              // logical resolution
+const PLAY = { x: 30, y: 34, w: 900, h: 572 };
+const START_LIVES = 3;
+const MAX_BALLS = 9;
+
+const LEVELS = [                      // name, layout mask, rows, ball speed, drop chance
+  { name: 'GLACIER SHELF',   pattern: 'solid',     rows: 5, speed: 330, drop: 0.085 },
+  ...
+];
+```
+
+Add a level by appending an entry plus a matching mask in `PATTERNS`.
+
+## 📄 License
+
+MIT — free to use in a portfolio, fork, or remix. Attribution appreciated.

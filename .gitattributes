@@ -1,0 +1,5 @@
+# Normalize line endings so the deployed files are consistent.
+* text=auto eol=lf
+
+# Sound effects are binary — never let git try to diff or normalize them.
+*.wav binary

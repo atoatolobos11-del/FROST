@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#04080f" />
+<meta name="description" content="Frost Breakout — a futuristic frozen arcade breakout game built with HTML5 Canvas and vanilla JavaScript." />
+<title>Frost Breakout ❄️</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3CradialGradient id='g' cx='50%25' cy='40%25'%3E%3Cstop offset='0' stop-color='%23eafaff'/%3E%3Cstop offset='1' stop-color='%2338bdf8'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='7' fill='%2308182e'/%3E%3Ccircle cx='16' cy='14' r='7' fill='url(%23g)'/%3E%3Crect x='6' y='24' width='20' height='4' rx='2' fill='%23bae6fd'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- Ambient decorative snow (pure CSS, sits behind the machine) -->
+<div class="ambient-snow" aria-hidden="true">
+  <i style="--x:4%;  --d:17s; --s:5px;  --o:.5"></i>
+  <i style="--x:12%; --d:23s; --s:3px;  --o:.35"></i>
+  <i style="--x:21%; --d:14s; --s:7px;  --o:.25"></i>
+  <i style="--x:30%; --d:26s; --s:4px;  --o:.45"></i>
+  <i style="--x:39%; --d:19s; --s:6px;  --o:.3"></i>
+  <i style="--x:48%; --d:29s; --s:3px;  --o:.55"></i>
+  <i style="--x:57%; --d:15s; --s:8px;  --o:.22"></i>
+  <i style="--x:66%; --d:24s; --s:4px;  --o:.4"></i>
+  <i style="--x:75%; --d:18s; --s:6px;  --o:.28"></i>
+  <i style="--x:84%; --d:27s; --s:3px;  --o:.5"></i>
+  <i style="--x:92%; --d:21s; --s:7px;  --o:.3"></i>
+</div>
+<div class="ambient-aurora" aria-hidden="true"></div>
+
+<main class="shell" id="shell">
+
+  <!-- ══════════════ HUD ══════════════ -->
+  <header class="hud">
+    <div class="hud-stats">
+      <div class="chip">
+        <span class="chip-ico ico-score">✦</span>
+        <span class="chip-body"><span class="chip-lab">Score</span><span class="chip-val" id="uiScore">0</span></span>
+      </div>
+
+      <div class="chip">
+        <span class="chip-ico ico-level">◈</span>
+        <span class="chip-body"><span class="chip-lab">Level</span><span class="chip-val" id="uiLevel">1<span class="chip-sub" id="uiLevelMax">/8</span></span></span>
+      </div>
+
+      <div class="chip">
+        <span class="chip-ico ico-life">♥</span>
+        <span class="chip-body"><span class="chip-lab">Lives</span><span class="chip-val lives" id="uiLives"></span></span>
+      </div>
+
+      <div class="chip chip-combo" id="uiComboChip" hidden>
+        <span class="chip-ico ico-combo">✧</span>
+        <span class="chip-body"><span class="chip-lab">Combo</span><span class="chip-val" id="uiCombo">x1</span></span>
+      </div>
+    </div>
+
+    <div class="hud-actions">
+      <button type="button" class="icon-btn" id="btnSound" title="Mute / Unmute  (M)" aria-label="Toggle sound" aria-pressed="false">
+        <span class="ico-sound">🔊</span>
+      </button>
+      <button type="button" class="icon-btn" id="btnPause" title="Pause / Resume  (P)" aria-label="Pause game" aria-pressed="false">
+        <span class="ico-pause">❚❚</span>
+      </button>
+      <button type="button" class="icon-btn" id="btnRestart" title="Restart game  (R)" aria-label="Restart game">
+        <span class="ico-restart">↻</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ══════════════ ARCADE MACHINE ══════════════ -->
+  <div class="stage" id="stage">
+    <div class="stage-frame" aria-hidden="true">
+      <span class="rim rim-tl"></span><span class="rim rim-tr"></span>
+      <span class="rim rim-bl"></span><span class="rim rim-br"></span>
+    </div>
+
+    <canvas id="game" width="960" height="640" role="img" aria-label="Frost Breakout play area"></canvas>
+    <div class="crt" aria-hidden="true"></div>
+
+    <!-- Center toast used for in-game events (level clear, ready, power-up) -->
+    <div class="banner" id="banner" hidden>
+      <div class="banner-title" id="bannerTitle"></div>
+      <div class="banner-sub" id="bannerSub"></div>
+    </div>
+
+    <!-- ── Start screen ── -->
+    <section class="overlay" id="ovMenu">
+      <div class="panel">
+        <div class="panel-glint" aria-hidden="true"></div>
+        <p class="eyebrow">Polar Arcade // Sector 07</p>
+        <h1 class="title">Frost<span>Breakout</span><em>❄️</em></h1>
+        <p class="lede">
+          Command a frost-forged paddle, keep the ice sphere aloft and shatter every
+          frozen block in the glacier. Clear all <b>8 levels</b> before the ice claims you.
+        </p>
+
+        <ul class="power-legend" aria-label="Power-ups">
+          <li><b>❄️</b><span>Multi Ball</span></li>
+          <li><b>🧊</b><span>Wide Paddle</span></li>
+          <li><b>⚡</b><span>Frost Dash</span></li>
+          <li><b>💎</b><span>Bonus Score</span></li>
+          <li><b>🛡️</b><span>Frost Shield</span></li>
+        </ul>
+
+        <button type="button" class="btn btn-primary" id="btnStart">
+          <span>Start Game</span>
+        </button>
+
+        <div class="hint">
+          <span><kbd>←</kbd><kbd>→</kbd> / <kbd>A</kbd><kbd>D</kbd> move</span>
+          <span><kbd>Space</kbd> launch</span>
+          <span><kbd>P</kbd> pause</span>
+          <span><kbd>M</kbd> mute</span>
+          <span class="hint-touch">Drag the arena to move</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Pause screen ── -->
+    <section class="overlay overlay-dim hidden" id="ovPause">
+      <div class="panel panel-sm">
+        <p class="eyebrow">System Hold</p>
+        <h2 class="title-sm">Paused</h2>
+        <p class="lede">The blizzard waits for you.</p>
+        <div class="btn-row">
+          <button type="button" class="btn btn-primary" id="btnResume">Resume</button>
+          <button type="button" class="btn btn-ghost" id="btnQuit">Main Menu</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Game over screen ── -->
+    <section class="overlay overlay-dim hidden" id="ovOver">
+      <div class="panel panel-sm">
+        <p class="eyebrow eyebrow-warn">Ice Meltdown</p>
+        <h2 class="title-sm">Game Over</h2>
+        <div class="scoreboard">
+          <div><span>Final Score</span><b id="ovOverScore">0</b></div>
+          <div><span>Level Reached</span><b id="ovOverLevel">1</b></div>
+          <div><span>Blocks Shattered</span><b id="ovOverBricks">0</b></div>
+          <div><span>Best Combo</span><b id="ovOverCombo">0</b></div>
+          <div><span>Best</span><b id="ovOverBest">0</b></div>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn btn-primary" id="btnRetry">Try Again</button>
+          <button type="button" class="btn btn-ghost" id="btnMenu2">Main Menu</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Victory screen ── -->
+    <section class="overlay hidden" id="ovWin">
+      <div class="panel">
+        <div class="panel-glint" aria-hidden="true"></div>
+        <p class="eyebrow eyebrow-win">Glacier Cleared</p>
+        <h2 class="title-sm title-win">Victory ❄️</h2>
+        <p class="lede">Every frozen block is dust. The arctic sector is yours.</p>
+        <div class="scoreboard">
+          <div><span>Final Score</span><b id="ovWinScore">0</b></div>
+          <div><span>Blocks Shattered</span><b id="ovWinBricks">0</b></div>
+          <div><span>Best Combo</span><b id="ovWinCombo">0</b></div>
+          <div><span>Lives Left</span><b id="ovWinLives">0</b></div>
+          <div><span>Best</span><b id="ovWinBest">0</b></div>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn btn-primary" id="btnPlayAgain">Play Again</button>
+          <button type="button" class="btn btn-ghost" id="btnMenu3">Main Menu</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="scan" aria-hidden="true"></div>
+  </div>
+
+  <!-- ══════════════ TOUCH CONTROLS ══════════════ -->
+  <div class="touch-bar" id="touchBar">
+    <button type="button" class="tbtn" id="btnLeft" aria-label="Move paddle left">◀</button>
+    <button type="button" class="tbtn tbtn-fire" id="btnFire" aria-label="Launch ball">❄️</button>
+    <button type="button" class="tbtn" id="btnRight" aria-label="Move paddle right">▶</button>
+  </div>
+
+  <p class="rotate-hint">↻ Rotate your device for a larger arena</p>
+
+  <footer class="legend">
+    <span class="legend-k">Controls</span>
+    <span><kbd>←</kbd><kbd>→</kbd><kbd>A</kbd><kbd>D</kbd> paddle</span>
+    <span><kbd>Space</kbd> launch</span>
+    <span><kbd>P</kbd> pause</span>
+    <span><kbd>R</kbd> restart</span>
+    <span class="legend-grow"></span>
+    <span class="legend-build">Vanilla JS · Canvas · No dependencies</span>
+  </footer>
+</main>
+
+<script src="script.js"></script>
+</body>
+</html>

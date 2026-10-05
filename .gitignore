@@ -1,0 +1,16 @@
+# nothing to ignore — the game is fully static.
+# Listed anyway so stray OS/editor files never get committed.
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+.vscode/
+.idea/
+
+*.log
+npm-debug.log*
+
+# local serve/tunnel scratch files
+.netlify/
+.vercel/
