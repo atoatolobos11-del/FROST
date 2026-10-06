@@ -3,10 +3,7 @@
  * Provides: single AudioContext, particle pool, high-score storage, input helpers.
  * Load once before any game module.
  */
-(function () {
-  'use strict';
-
-  /* ─── AudioContext singleton ─── */
+/* ─── AudioContext singleton ─── */
   let AudioCtx = null;
   let MasterGain = null;
   let Compressor = null;
@@ -303,4 +300,3 @@
     /* constants */
     PARTICLE_CAP,
   };
-})();
