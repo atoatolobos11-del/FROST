@@ -2,8 +2,6 @@
  * Frost Snake — enhanced grid arena with frost trails, power-ups, obstacles.
  * Exports: { init(canvas, shared), destroy() }
  */
-export default (function () {
-  'use strict';
 
   let shared = null;
   let canvas = null;
@@ -34,7 +32,7 @@ export default (function () {
   let combo = 0, lastFoodTime = 0;
   let trail = []; // visual trail particles
 
-  function init(c, sh) {
+export function init(c, sh) {
     canvas = c; shared = sh; ctx = canvas.getContext('2d');
     resize();
     window.addEventListener('resize', resize);
@@ -46,7 +44,7 @@ export default (function () {
     shared.unlockAudio();
   }
 
-  function destroy() {
+export function destroy() {
     running = false;
     if (animationId) cancelAnimationFrame(animationId);
     window.removeEventListener('resize', resize);
@@ -386,6 +384,7 @@ export default (function () {
 
   function randInt(a, b) { return Math.floor(Math.random() * (b - a + 1)) + a; }
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-
-  return { init, destroy };
-})();
+export function togglePause() {
+  if (state === 'playing') state = 'paused';
+  else if (state === 'paused') state = 'playing';
+}

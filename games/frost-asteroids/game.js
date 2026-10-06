@@ -2,8 +2,6 @@
  * Frost Asteroids — enhanced twin-stick shooter with waves, bosses, power-ups.
  * Exports: { init(canvas, shared), destroy() }
  */
-export default (function () {
-  'use strict';
 
   let shared = null, canvas = null, ctx = null, animationId = null, running = false;
   const W = 960, H = 540;
@@ -24,14 +22,14 @@ export default (function () {
   // Input
   const keys = {};
 
-  function init(c, sh) { canvas = c; shared = sh; ctx = canvas.getContext('2d');
+export function init(c, sh) { canvas = c; shared = sh; ctx = canvas.getContext('2d');
     resize(); window.addEventListener('resize', resize);
     window.addEventListener('keydown', e => { keys[e.code] = true; });
     window.addEventListener('keyup', e => { keys[e.code] = false; });
     highScore = shared.getBestScore('asteroids') || 0;
     reset(); running = true; animationId = requestAnimationFrame(loop); shared.unlockAudio(); }
 
-  function destroy() { running = false; if (animationId) cancelAnimationFrame(animationId);
+export function destroy() { running = false; if (animationId) cancelAnimationFrame(animationId);
     window.removeEventListener('resize', resize); shared.clearParticles(); }
 
   function resize() { const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
@@ -414,6 +412,12 @@ export default (function () {
   function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
   function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
   function weightedPick(arr, weights) { const total = weights.reduce((a,b)=>a+b,0); let r = Math.random()*total; for(let i=0;i<arr.length;i++){ r-=weights[i]; if(r<=0) return arr[i]; } return arr[arr.length-1]; }
+export function togglePause() {
+  if (state === 'playing') state = 'paused';
+  else if (state === 'paused') state = 'playing';
+}
 
-  return { init, destroy, togglePause: () => { if (state === 'playing') state = 'paused'; else if (state === 'paused') state = 'playing'; } };
-})();
+function enemyShoot(e) {
+  const a = Math.atan2(ship.y - e.y, ship.x - e.x);
+  bossBullets.push({ x: e.x, y: e.y, vx: Math.cos(a) * 220, vy: Math.sin(a) * 220, life: 2.5, color: C.red });
+}

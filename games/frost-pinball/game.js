@@ -2,8 +2,6 @@
  * Frost Pinball — single table with flippers, bumpers, ramps, multiball.
  * Exports: { init(canvas, shared), destroy() }
  */
-export default (function () {
-  'use strict';
 
   let shared = null, canvas = null, ctx = null, animationId = null, running = false;
   const W = 720, H = 1080; // Portrait table
@@ -21,14 +19,14 @@ export default (function () {
   let state = 'menu', shake = 0, plunger = { pulled: 0, charging: false };
   let bonuses = { leftLane: false, rightLane: false, centerTarget: 0, spinner: 0 };
 
-  function init(c, sh) { canvas = c; shared = sh; ctx = canvas.getContext('2d');
+export function init(c, sh) { canvas = c; shared = sh; ctx = canvas.getContext('2d');
     resize(); window.addEventListener('resize', resize);
     window.addEventListener('keydown', e => { if (e.key === 'ArrowLeft' || e.key === 'a') flippers.left.up = true; if (e.key === 'ArrowRight' || e.key === 'd') flippers.right.up = true; if (e.key === ' ' || e.key === 'Enter') { if (state === 'menu') launchBall(); else if (state === 'gameover') reset(); else plunger.charging = true; } if (e.key === 'p') { if (state === 'playing') state = 'paused'; else if (state === 'paused') state = 'playing'; } });
     window.addEventListener('keyup', e => { if (e.key === 'ArrowLeft' || e.key === 'a') flippers.left.up = false; if (e.key === 'ArrowRight' || e.key === 'd') flippers.right.up = false; if (e.key === ' ' || e.key === 'Enter') { if (plunger.charging) { launchBall(plunger.pulled); plunger.charging = false; plunger.pulled = 0; } } });
     highScore = shared.getBestScore('pinball') || 0;
     buildTable(); reset(); running = true; animationId = requestAnimationFrame(loop); shared.unlockAudio(); }
 
-  function destroy() { running = false; if (animationId) cancelAnimationFrame(animationId); window.removeEventListener('resize', resize); shared.clearParticles(); }
+export function destroy() { running = false; if (animationId) cancelAnimationFrame(animationId); window.removeEventListener('resize', resize); shared.clearParticles(); }
 
   function resize() { const dpr = Math.min(window.devicePixelRatio || 1, 2.5); canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
 
@@ -368,6 +366,7 @@ export default (function () {
     g.arcTo(x, y+h, x, y+h-rad, rad); g.lineTo(x, y+rad);
     g.arcTo(x, y, x+rad, y, rad); g.closePath();
   }
-
-  return { init, destroy, togglePause: () => { if (state === 'playing') state = 'paused'; else if (state === 'paused') state = 'playing'; } };
-})();
+export function togglePause() {
+  if (state === 'playing') state = 'paused';
+  else if (state === 'paused') state = 'playing';
+}
