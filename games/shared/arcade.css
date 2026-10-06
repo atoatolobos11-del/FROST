@@ -92,10 +92,14 @@ body {
 /* Selector */
 .selector {
   flex: 1;
+  min-height: 0;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   padding: 24px;
   text-align: center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 
 .selector-title {
@@ -151,7 +155,8 @@ body {
 .arcade-meta{margin-top:16px;font-size:.8rem;color:var(--ice-300);opacity:.75}
 
 /* global settings overlay */
-.settings-overlay{position:absolute;inset:0;z-index:20;display:grid;place-items:center;background:rgba(2,8,16,.78);padding:16px}
+.settings-overlay{position:absolute;inset:0;z-index:20;display:grid;place-items:center;background:rgba(2,8,16,.78);padding:16px;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y}
+.settings-overlay .settings-panel{margin:auto}
 .settings-panel{width:min(430px,100%);border:1px solid var(--stroke);border-radius:18px;padding:22px;background:linear-gradient(180deg,rgba(18,44,76,.95),rgba(7,18,34,.97));box-shadow:var(--glow-ice)}
 .settings-title{margin:0 0 4px;font-size:1.3rem;font-weight:900}
 .settings-note{margin:0 0 12px;font-size:.8rem;color:var(--ice-300);opacity:.8}

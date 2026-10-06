@@ -397,7 +397,13 @@ kbd {
   background:
     radial-gradient(80% 70% at 50% 45%, rgba(5, 18, 34, .82), rgba(1, 5, 11, .95));
   animation: fadeIn .35s var(--ease) both;
+  /* tall panels (menu with modes, achievements, settings) must scroll on small screens */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
+
+.overlay > .panel { margin: auto; }
 
 .overlay-dim { background: rgba(3, 10, 20, .74); }
 
