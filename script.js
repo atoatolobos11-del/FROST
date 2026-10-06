@@ -2376,6 +2376,22 @@
     setState('menu');
   });
 
+  function quitGame() {
+    /* Stop the game loop cleanly */
+    G.balls = []; G.powerups = []; G.particles = []; G.rings = []; G.texts = [];
+    G.shield = 0; G.paddle = new Paddle();
+    setState('menu');
+
+    /* Try to close the tab — only works if we opened it */
+    try { window.close(); } catch (e) { /* no-op */ }
+  }
+
+  ['btnQuitGame', 'btnQuitGameOver', 'btnQuitGameWin'].forEach(function (id) {
+    document.getElementById(id).addEventListener('click', function () {
+      if (confirm('Quit Frost Breakout? Your progress will be saved.')) quitGame();
+    });
+  });
+
   bindTouchButton(document.getElementById('btnLeft'), -1);
   bindTouchButton(document.getElementById('btnRight'), 1);
   bindTouchButton(document.getElementById('btnFire'), 0);

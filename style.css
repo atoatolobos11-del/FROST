@@ -656,6 +656,18 @@ kbd {
 .btn-ghost::after { display: none; }
 .btn-ghost:hover { color: #fff; box-shadow: 0 0 0 1px rgba(150, 220, 255, .5) inset, var(--glow-ice); }
 
+.btn-danger {
+  min-width: 132px;
+  color: #fff;
+  background: linear-gradient(180deg, #ff4444 0%, #cc0000 45%, #990000 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 100, 100, .55) inset,
+    0 10px 26px -8px rgba(204, 0, 0, .65),
+    0 0 30px -6px rgba(255, 50, 50, .45);
+}
+.btn-danger::after { display: none; }
+.btn-danger:hover { box-shadow: 0 0 0 1px rgba(255, 150, 150, .7) inset, 0 0 40px -4px rgba(255, 80, 80, .7); }
+
 /* ---------- 8. Touch controls, legend, responsive ------------------------ */
 .touch-bar {
   display: none;
