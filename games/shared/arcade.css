@@ -17,6 +17,9 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 html, body { height: 100%; }
+/* The shell toggles sections with the `hidden` attribute — author display
+   rules below would otherwise override the UA `[hidden]{display:none}`. */
+[hidden] { display: none !important; }
 body {
   margin: 0;
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
