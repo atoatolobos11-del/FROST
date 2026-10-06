@@ -133,6 +133,12 @@ function drawOverlay(title, subtitle) {
 
 export function init(c, sh) {
   canvas = c; shared = sh; ctx = canvas.getContext('2d');
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
   resize();
   window.addEventListener('resize', resize);
   window.addEventListener('keydown', onKeyDown);
