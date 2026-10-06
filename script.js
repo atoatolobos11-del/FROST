@@ -2324,6 +2324,7 @@
     btnPause: document.getElementById('btnPause'),
     btnRestart: document.getElementById('btnRestart'),
     btnFullscreen: document.getElementById('btnFullscreen'),
+    btnArcade: document.getElementById('btnArcade'),
     ovMenu: document.getElementById('ovMenu'),
     ovPause: document.getElementById('ovPause'),
     ovOver: document.getElementById('ovOver'),
@@ -2385,6 +2386,7 @@
   ui.btnRestart.addEventListener('click', function () { restart(); });
   ui.btnSound.addEventListener('click', function () { Sound.unlock(); toggleMute(); });
   ui.btnFullscreen.addEventListener('click', function () { toggleFullscreen(); });
+  ui.btnArcade.addEventListener('click', function () { window.location.href = 'games/shell.html'; });
 
   ['btnMenu2', 'btnMenu3'].forEach(function (id) {
     document.getElementById(id).addEventListener('click', function () {
