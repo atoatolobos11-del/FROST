@@ -10,6 +10,7 @@ let Compressor = null;
 let NoiseBuffer = null;
 const buffers = {};
 let muted = false;
+let volume = 0.8;
 
 function getAudioContext() {
   if (AudioCtx) return AudioCtx;
@@ -17,7 +18,7 @@ function getAudioContext() {
   if (!AC) return null;
   AudioCtx = new AC();
   MasterGain = AudioCtx.createGain();
-  MasterGain.gain.value = 0.7;
+  MasterGain.gain.value = 0.7 * volume;
   Compressor = AudioCtx.createDynamicsCompressor();
   Compressor.threshold.value = -18;
   Compressor.knee.value = 12;
@@ -103,10 +104,16 @@ export function loadSamples(manifest) {
 
 export function setMuted(v) {
   muted = v;
-  if (MasterGain) MasterGain.gain.value = v ? 0 : 0.7;
+  if (MasterGain) MasterGain.gain.value = v ? 0 : 0.7 * volume;
 }
 
 export function isMuted() { return muted; }
+
+export function setVolume(v) {
+  volume = Math.min(1, Math.max(0, Number(v) || 0));
+  if (MasterGain && !muted) MasterGain.gain.value = 0.7 * volume;
+}
+export function getVolume() { return volume; }
 
 /* ─── Particle pool ─── */
 const PARTICLE_CAP = 500;

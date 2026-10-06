@@ -7,7 +7,13 @@
 <meta name="description" content="Frost Breakout — a futuristic frozen arcade breakout game built with HTML5 Canvas and vanilla JavaScript." />
 <title>Frost Breakout ❄️</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3CradialGradient id='g' cx='50%25' cy='40%25'%3E%3Cstop offset='0' stop-color='%23eafaff'/%3E%3Cstop offset='1' stop-color='%2338bdf8'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='7' fill='%2308182e'/%3E%3Ccircle cx='16' cy='14' r='7' fill='url(%23g)'/%3E%3Crect x='6' y='24' width='20' height='4' rx='2' fill='%23bae6fd'/%3E%3C/svg%3E" />
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
 <link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="extras.css" />
 </head>
 <body>
 
@@ -54,6 +60,9 @@
     </div>
 
     <div class="hud-actions">
+      <button type="button" class="icon-btn" id="btnSettingsHud" title="Settings" aria-label="Open settings">
+        <span class="ico-sound">⚙</span>
+      </button>
       <button type="button" class="icon-btn" id="btnSound" title="Mute / Unmute  (M)" aria-label="Toggle sound" aria-pressed="false">
         <span class="ico-sound">🔊</span>
       </button>
@@ -107,9 +116,27 @@
           <li><b>🛡️</b><span>Frost Shield</span></li>
         </ul>
 
+        <div class="menu-modes" role="tablist" aria-label="Game mode">
+          <button type="button" class="mode-btn active" data-mode="classic">Classic<small>8 levels</small></button>
+          <button type="button" class="mode-btn" data-mode="daily">Daily<small>changes daily</small></button>
+          <button type="button" class="mode-btn" data-mode="endless">Endless<small>survive</small></button>
+          <button type="button" class="mode-btn" data-mode="custom">Custom<small>level editor</small></button>
+        </div>
+        <p class="daily-line" id="dailyLine"></p>
+
         <button type="button" class="btn btn-primary" id="btnStart">
           <span>Start Game</span>
         </button>
+
+        <div class="menu-extras" style="margin-top:12px">
+          <button type="button" class="mini-btn primary" id="btnContinue" style="display:none">▶ Continue</button>
+          <button type="button" class="mini-btn" id="btnLevels">▦ Levels</button>
+          <button type="button" class="mini-btn" id="btnHow">❓ How to Play</button>
+          <button type="button" class="mini-btn" id="btnSettings">⚙ Settings</button>
+          <button type="button" class="mini-btn" id="btnStats">📊 Stats</button>
+          <button type="button" class="mini-btn" id="btnAch">🏆 Achievements</button>
+          <button type="button" class="mini-btn" id="btnEditor">🧱 Editor</button>
+        </div>
 
         <div class="hint">
           <span><kbd>←</kbd><kbd>→</kbd> / <kbd>A</kbd><kbd>D</kbd> move</span>
@@ -153,6 +180,10 @@
           <button type="button" class="btn btn-primary" id="btnRetry">Try Again</button>
           <button type="button" class="btn btn-ghost" id="btnMenu2">Main Menu</button>
         </div>
+        <div class="share-row">
+          <button type="button" class="mini-btn" id="btnShareOver">📣 Share</button>
+          <button type="button" class="mini-btn" id="btnShotOver">📸 Save PNG</button>
+        </div>
         <div class="btn-row" style="margin-top:8px;">
           <button type="button" class="btn btn-danger" id="btnQuitGameOver">Quit Game</button>
         </div>
@@ -177,6 +208,10 @@
           <button type="button" class="btn btn-primary" id="btnPlayAgain">Play Again</button>
           <button type="button" class="btn btn-ghost" id="btnMenu3">Main Menu</button>
         </div>
+        <div class="share-row">
+          <button type="button" class="mini-btn" id="btnShareWin">📣 Share</button>
+          <button type="button" class="mini-btn" id="btnShotWin">📸 Save PNG</button>
+        </div>
         <div class="btn-row" style="margin-top:8px;">
           <button type="button" class="btn btn-danger" id="btnQuitGameWin">Quit Game</button>
         </div>
@@ -184,6 +219,79 @@
     </section>
 
     <div class="scan" aria-hidden="true"></div>
+    <div id="toasts" aria-live="polite"></div>
+
+    <!-- ── Settings ── -->
+    <section class="overlay overlay-dim hidden" id="ovSettings">
+      <div class="panel panel-sm panel-wide">
+        <p class="eyebrow">System</p>
+        <h2 class="title-sm">Settings ⚙</h2>
+        <div class="set-row"><label>Difficulty<small>Chill slower · Blizzard faster + more score</small></label><select id="setDifficulty"><option value="chill">Chill</option><option value="normal">Normal</option><option value="blizzard">Blizzard</option></select></div>
+        <div class="set-row"><label>Volume<small>Master sound level</small></label><span><input type="range" id="setVolume" min="0" max="1" step="0.05" value="0.8" /> <b id="setVolumeVal">80%</b></span></div>
+        <div class="set-row"><label>Screen shake<small>Camera kick on hits</small></label><label class="switch"><input type="checkbox" id="setShake" checked /><i></i></label></div>
+        <div class="set-row"><label>Particles<small>Shatter shards, sparks, mist</small></label><label class="switch"><input type="checkbox" id="setParticles" checked /><i></i></label></div>
+        <div class="set-row"><label>Flashes<small>Full-screen color flashes</small></label><label class="switch"><input type="checkbox" id="setFlash" checked /><i></i></label></div>
+        <div class="btn-row" style="margin-top:14px"><button type="button" class="btn btn-primary" id="ovSettingsX">Done</button><button type="button" class="btn btn-ghost" id="btnWipe">Reset data</button></div>
+      </div>
+    </section>
+
+    <!-- ── Level select ── -->
+    <section class="overlay overlay-dim hidden" id="ovLevels">
+      <div class="panel panel-sm panel-wide">
+        <p class="eyebrow">Select Sector</p>
+        <h2 class="title-sm">Levels ▦</h2>
+        <div class="level-grid" id="levelGrid"></div>
+        <div class="btn-row"><button type="button" class="btn btn-ghost" id="ovLevelsX">Close</button></div>
+      </div>
+    </section>
+
+    <!-- ── Stats ── -->
+    <section class="overlay overlay-dim hidden" id="ovStats">
+      <div class="panel panel-sm panel-wide">
+        <p class="eyebrow">Records</p>
+        <h2 class="title-sm">Stats 📊</h2>
+        <div class="stat-grid">
+          <div><span>Best Score</span><b id="stBest">0</b></div>
+          <div><span>Wins</span><b id="stWins">0</b></div>
+          <div><span>Runs</span><b id="stRuns">0</b></div>
+          <div><span>Bricks</span><b id="stBricks">0</b></div>
+          <div><span>Best Combo</span><b id="stCombo">0</b></div>
+          <div><span>Power-ups</span><b id="stPower">0</b></div>
+          <div><span>Classic Best</span><b id="stClassic">0</b></div>
+          <div><span>Daily Best</span><b id="stDaily">0</b></div>
+          <div><span>Endless Best</span><b id="stEndless">0</b></div>
+          <div><span>Custom Best</span><b id="stCustom">0</b></div>
+        </div>
+        <div class="btn-row"><button type="button" class="btn btn-ghost" id="ovStatsX">Close</button></div>
+      </div>
+    </section>
+
+    <!-- ── Achievements ── -->
+    <section class="overlay overlay-dim hidden" id="ovAch">
+      <div class="panel panel-sm panel-wide">
+        <p class="eyebrow">Trophies</p>
+        <h2 class="title-sm">Achievements 🏆</h2>
+        <p class="daily-line" id="achCount"></p>
+        <div class="ach-list" id="achList"></div>
+        <div class="btn-row"><button type="button" class="btn btn-ghost" id="ovAchX">Close</button></div>
+      </div>
+    </section>
+
+    <!-- ── How to play ── -->
+    <section class="overlay overlay-dim hidden" id="ovHowto">
+      <div class="panel panel-sm panel-wide">
+        <p class="eyebrow">Manual</p>
+        <h2 class="title-sm">How to Play ❓</h2>
+        <div class="how-steps">
+          <div><b>1. Move</b> — <kbd>←</kbd><kbd>→</kbd> / <kbd>A</kbd><kbd>D</kbd> or drag on the arena. Catch falling capsules with the paddle.</div>
+          <div><b>2. Launch</b> — <kbd>Space</kbd> / click / tap ❄️. Angle depends on where the ball hits the paddle.</div>
+          <div><b>3. Combo</b> — break blocks without touching the paddle to raise the multiplier up to ×5.</div>
+          <div><b>4. Power-ups</b> — ❄️ multi-ball · 🧊 wide · ⚡ dash · 💎 bonus · 🛡️ shield absorbs one fall.</div>
+          <div><b>5. Survive</b> — 3 lives. Bedrock is indestructible. Clear all breakable blocks to advance.</div>
+        </div>
+        <div class="btn-row"><button type="button" class="btn btn-primary" id="ovHowtoX">Got it</button></div>
+      </div>
+    </section>
   </div>
 
   <!-- ══════════════ TOUCH CONTROLS ══════════════ -->
@@ -207,5 +315,6 @@
 </main>
 
 <script src="script.js"></script>
+<script src="extras.js"></script>
 </body>
 </html>

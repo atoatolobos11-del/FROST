@@ -34,6 +34,7 @@ let winner = null;
 let shake = 0;
 const keys = { KeyW: false, KeyS: false, ArrowUp: false, ArrowDown: false };
 let touchL = null, touchR = null; // touch-drag paddle targets (canvas Y)
+let keyL = 0, keyR = 0; // on-screen button state: -1 up, +1 down
 
 function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
 
@@ -171,7 +172,7 @@ export function destroy() {
     canvas.removeEventListener('pointercancel', onTouchUp);
   }
   Object.keys(keys).forEach(k => { keys[k] = false; });
-  touchL = null; touchR = null;
+  touchL = null; touchR = null; keyL = 0; keyR = 0;
   if (shared) shared.clearParticles();
   canvas = null; ctx = null;
 }
@@ -179,6 +180,15 @@ export function destroy() {
 export function togglePause() {
   if (state === 'playing') state = 'paused';
   else if (state === 'paused') state = 'playing';
+}
+
+/* on-screen controller buttons (built by the arcade shell) */
+export function onTouchControl(name, on) {
+  if (state === 'menu' || state === 'gameover') startGameIfIdle();
+  if (name === 'p1up') keyL = on ? -1 : (keyL === -1 ? 0 : keyL);
+  else if (name === 'p1down') keyL = on ? 1 : (keyL === 1 ? 0 : keyL);
+  else if (name === 'p2up') keyR = on ? -1 : (keyR === -1 ? 0 : keyR);
+  else if (name === 'p2down') keyR = on ? 1 : (keyR === 1 ? 0 : keyR);
 }
 
 function resize() {
@@ -251,6 +261,8 @@ function update(dt) {
   if (keys.ArrowDown && !right.ai) right.y = Math.min(H - PADDLE_H, right.y + move);
   if (touchL != null && !left.ai) left.y = clamp(touchL - PADDLE_H / 2, 0, H - PADDLE_H);
   if (touchR != null && !right.ai) right.y = clamp(touchR - PADDLE_H / 2, 0, H - PADDLE_H);
+  if (keyL !== 0 && !left.ai) left.y = clamp(left.y + keyL * move, 0, H - PADDLE_H);
+  if (keyR !== 0 && !right.ai) right.y = clamp(right.y + keyR * move, 0, H - PADDLE_H);
   if (left.ai) {
     const target = ball.y - PADDLE_H / 2;
     left.y += Math.sign(target - left.y) * move * 0.7;

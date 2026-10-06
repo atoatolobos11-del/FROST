@@ -66,6 +66,22 @@ export function destroy() {
     shared.clearParticles();
   }
 
+export function togglePause() {
+  if (state === 'playing') state = 'paused';
+  else if (state === 'paused') state = 'playing';
+}
+
+/* on-screen D-pad (built by the arcade shell) */
+export function onTouchControl(name, on) {
+  if (!on) return;
+  if (state === 'menu') state = 'playing';
+  else if (state === 'gameover') { reset(); state = 'playing'; }
+  if (name === 'up' && dir.y !== 1) nextDir = { x: 0, y: -1 };
+  else if (name === 'down' && dir.y !== -1) nextDir = { x: 0, y: 1 };
+  else if (name === 'left' && dir.x !== 1) nextDir = { x: -1, y: 0 };
+  else if (name === 'right' && dir.x !== -1) nextDir = { x: 1, y: 0 };
+}
+
   function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
     canvas.width = Math.round(W * dpr);
@@ -430,7 +446,3 @@ export function destroy() {
 
   function randInt(a, b) { return Math.floor(Math.random() * (b - a + 1)) + a; }
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-export function togglePause() {
-  if (state === 'playing') state = 'paused';
-  else if (state === 'paused') state = 'playing';
-}

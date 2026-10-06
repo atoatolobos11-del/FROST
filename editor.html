@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#04080f" />
+<title>Frost Breakout — Level Editor 🧱</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2308182e'/%3E%3Ccircle cx='16' cy='14' r='7' fill='%2338bdf8'/%3E%3C/svg%3E" />
+<style>
+:root{--stroke:rgba(140,210,255,.18);--ice:#bae6fd}
+*{box-sizing:border-box}body{margin:0;min-height:100%;font-family:"Segoe UI",system-ui,sans-serif;color:#d5f0ff;background:linear-gradient(180deg,#03070d,#061a2e);display:flex;justify-content:center;padding:18px}
+.shell{width:min(980px,100%);display:flex;flex-direction:column;gap:12px}
+.hud{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border:1px solid var(--stroke);border-radius:14px;background:rgba(8,24,44,.7)}
+.hud b{letter-spacing:.06em}.hud a{color:var(--ice);text-decoration:none;font-weight:700}
+.panel{border:1px solid var(--stroke);border-radius:16px;padding:16px;background:rgba(8,24,44,.6)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 12px}
+.btn{padding:10px 16px;border-radius:12px;border:0;font:inherit;font-weight:800;cursor:pointer;background:linear-gradient(180deg,#eafaff,#3aa8e6);color:#02121f}
+.ghost{padding:10px 16px;border-radius:12px;border:1px solid var(--stroke);background:rgba(11,32,58,.7);color:#d5f0ff;font:inherit;font-weight:700;cursor:pointer}
+select,input[type=text],input[type=number]{background:#0b2540;color:#e8faff;border:1px solid var(--stroke);border-radius:8px;padding:7px 10px;font:inherit}
+.palette{display:flex;gap:8px;flex-wrap:wrap}
+.pal{padding:8px 12px;border-radius:999px;border:2px solid transparent;background:rgba(11,32,58,.7);color:#e8faff;font:inherit;font-weight:700;cursor:pointer}
+.pal.active{border-color:#57e6ff}
+.grid{display:grid;gap:4px;user-select:none;touch-action:none;background:rgba(2,10,22,.5);padding:10px;border-radius:12px;border:1px solid var(--stroke)}
+.cell{aspect-ratio:2.6/1;border-radius:5px;border:1px solid rgba(140,210,255,.22);background:rgba(20,40,70,.35);cursor:pointer}
+.cell.glacier{background:linear-gradient(180deg,#baeeff,#226caa)}
+.cell.frost{background:linear-gradient(180deg,#8ad0ff,#1e56a0)}
+.cell.pack{background:linear-gradient(180deg,#78acfa,#183e8a)}
+.cell.ember{background:linear-gradient(180deg,#d8aaff,#583298)}
+.cell.bedrock{background:linear-gradient(180deg,#607686,#1a283e)}
+textarea{width:100%;min-height:90px;background:#04101f;color:#9fe6ff;border:1px solid var(--stroke);border-radius:10px;padding:10px;font-family:monospace;font-size:12px}
+small.hint{opacity:.65}
+</style>
+</head>
+<body>
+<main class="shell">
+  <div class="hud"><b>🧱 Frost Breakout — Level Editor</b><span><a href="index.html">← Game</a> · <a href="games/shell.html">🏪 Arcade</a></span></div>
+  <div class="panel">
+    <div class="row">
+      <label>Name <input type="text" id="edName" value="MY GLACIER" style="width:160px" /></label>
+      <label>Cols <select id="edCols"><option>11</option><option>12</option><option selected>13</option></select></label>
+      <label>Rows <select id="edRows"><option>5</option><option>6</option><option>7</option><option>8</option><option selected>9</option></select></label>
+      <label>Ball speed <input type="number" id="edSpeed" value="360" min="200" max="600" step="10" style="width:80px" /></label>
+    </div>
+    <div class="row palette" id="edPal">
+      <button class="pal active" data-t="glacier">Glacier</button>
+      <button class="pal" data-t="frost">Frost 2hp</button>
+      <button class="pal" data-t="pack">Pack 3hp</button>
+      <button class="pal" data-t="ember">Ember</button>
+      <button class="pal" data-t="bedrock">Bedrock</button>
+      <button class="pal" data-t="">🧽 Eraser</button>
+    </div>
+    <div class="grid" id="edGrid"></div>
+    <div class="row" style="margin-top:12px">
+      <button class="ghost" id="edFill">Fill all</button>
+      <button class="ghost" id="edClear">Clear</button>
+      <button class="ghost" id="edSample">Sample: pyramid</button>
+      <button class="ghost" id="edLoad">Load saved</button>
+    </div>
+    <div class="row">
+      <button class="btn" id="edSave">💾 Save</button>
+      <button class="btn" id="edPlay">▶ Save + Play</button>
+      <button class="ghost" id="edExport">Export JSON</button>
+      <button class="ghost" id="edImport">Import JSON</button>
+      <button class="ghost" id="edDownload">Download file</button>
+    </div>
+    <textarea id="edJson" placeholder='Exported JSON appears here. Paste JSON then hit "Import JSON".'></textarea>
+    <small class="hint">Saved to <code>localStorage → frost-breakout:custom</code>. Play via Custom mode on the main menu, or <code>index.html?play=custom</code>. At least 1 breakable block is required.</small>
+  </div>
+</main>
+<script>
+(function(){
+  const $=id=>document.getElementById(id);
+  const grid=$('edGrid'), pal=$('edPal');
+  let tool='glacier', painting=false, erase=false;
+  function dims(){return{cols:parseInt($('edCols').value,10),rows:parseInt($('edRows').value,10)};}
+  function build(){
+    const{cols,rows}=dims();
+    grid.style.gridTemplateColumns='repeat('+cols+',1fr)';
+    grid.innerHTML='';
+    for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+      const d=document.createElement('div');
+      d.className='cell';d.dataset.c=c;d.dataset.r=r;
+      d.addEventListener('pointerdown',e=>{e.preventDefault();painting=true;paint(d,e);});
+      d.addEventListener('pointerenter',e=>{if(painting)paint(d,e);});
+      grid.appendChild(d);
+    }
+  }
+  function paint(d,e){
+    const t=(e&&e.shiftKey)?'':tool;
+    d.className='cell'+(t?' '+t:'');
+  }
+  window.addEventListener('pointerup',()=>painting=false);
+  pal.addEventListener('click',e=>{
+    const b=e.target.closest('.pal');if(!b)return;
+    tool=b.dataset.t;
+    pal.querySelectorAll('.pal').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+  });
+  $('edCols').addEventListener('change',build);
+  $('edRows').addEventListener('change',build);
+  $('edFill').addEventListener('click',()=>grid.querySelectorAll('.cell').forEach(d=>d.className='cell '+(tool||'glacier')));
+  $('edClear').addEventListener('click',()=>grid.querySelectorAll('.cell').forEach(d=>d.className='cell'));
+  $('edSample').addEventListener('click',()=>{
+    const{cols,rows}=dims();
+    grid.querySelectorAll('.cell').forEach(d=>{
+      const c=+d.dataset.c,r=+d.dataset.r;
+      const on=Math.abs(c-(cols-1)/2)<=r+0.4;
+      d.className='cell'+(on?' frost':'');
+    });
+  });
+  function collect(){
+    const{cols,rows}=dims();
+    const cells=[];
+    grid.querySelectorAll('.cell').forEach(d=>{
+      const m=d.className.match(/glacier|frost|pack|ember|bedrock/);
+      if(m)cells.push({c:+d.dataset.c,r:+d.dataset.r,t:m[0]});
+    });
+    return{name:($('edName').value||'CUSTOM').toUpperCase(),cols,rows,speed:parseInt($('edSpeed').value,10)||360,cells};
+  }
+  function applyData(o){
+    if(!o||!o.cols||!o.rows||!Array.isArray(o.cells))return alert('Bad JSON');
+    $('edName').value=o.name||'CUSTOM';$('edCols').value=String(o.cols);$('edRows').value=String(o.rows);$('edSpeed').value=o.speed||360;
+    build();
+    const key={};o.cells.forEach(c=>key[c.c+':'+c.r]=c.t);
+    grid.querySelectorAll('.cell').forEach(d=>{
+      const t=key[d.dataset.c+':'+d.dataset.r];
+      d.className='cell'+(t?' '+t:'');
+    });
+  }
+  function hasBreakable(cells){return cells.some(c=>c.t!=='bedrock');}
+  $('edSave').addEventListener('click',()=>{
+    const o=collect();
+    if(!o.cells.length||!hasBreakable(o.cells))return alert('Add at least 1 breakable block.');
+    localStorage.setItem('frost-breakout:custom',JSON.stringify(o));
+    alert('Saved! Open the game → Custom mode to play.');
+  });
+  $('edPlay').addEventListener('click',()=>{
+    const o=collect();
+    if(!o.cells.length||!hasBreakable(o.cells))return alert('Add at least 1 breakable block.');
+    localStorage.setItem('frost-breakout:custom',JSON.stringify(o));
+    location.href='index.html?play=custom';
+  });
+  $('edLoad').addEventListener('click',()=>{
+    try{const o=JSON.parse(localStorage.getItem('frost-breakout:custom'));if(!o)return alert('Nothing saved yet.');applyData(o);}catch(e){alert('Load failed');}
+  });
+  $('edExport').addEventListener('click',()=>{$('edJson').value=JSON.stringify(collect());});
+  $('edImport').addEventListener('click',()=>{try{applyData(JSON.parse($('edJson').value));}catch(e){alert('Invalid JSON');}});
+  $('edDownload').addEventListener('click',()=>{
+    const blob=new Blob([JSON.stringify(collect(),null,2)],{type:'application/json'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='frost-level.json';a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+  });
+  build();
+})();
+</script>
+</body>
+</html>

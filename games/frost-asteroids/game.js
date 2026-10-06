@@ -21,6 +21,7 @@
 
   // Input
   const keys = {};
+  let touchMove = { left: false, right: false, thrust: false, fire: false };
 
 export function init(c, sh) { canvas = c; shared = sh; ctx = canvas.getContext('2d');
     if (running) { try { destroy(); } catch (e) { /* ignore */ } }
@@ -47,6 +48,7 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
       canvas.removeEventListener('pointercancel', onTouchUp);
     }
     Object.keys(keys).forEach(k => { keys[k] = false; });
+    touchMove.left = touchMove.right = touchMove.thrust = touchMove.fire = false;
     touchTarget = null;
     shared.clearParticles(); }
 
@@ -63,7 +65,18 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
     }
   }
   function onKeyUp(e) { keys[e.code] = false; }
-  function onBlur() { Object.keys(keys).forEach(k => { keys[k] = false; }); touchTarget = null; }
+  function onBlur() { Object.keys(keys).forEach(k => { keys[k] = false; }); touchTarget = null;
+    touchMove.left = touchMove.right = touchMove.thrust = touchMove.fire = false; }
+
+  /* on-screen flight buttons (built by the arcade shell) */
+  export function onTouchControl(name, on) {
+    if (state === 'menu' && on) { state = 'playing'; return; }
+    if (state === 'gameover' && on) { reset(); state = 'playing'; return; }
+    if (name === 'left') touchMove.left = on;
+    else if (name === 'right') touchMove.right = on;
+    else if (name === 'thrust') touchMove.thrust = on;
+    else if (name === 'fire') touchMove.fire = on;
+  }
 
   /* touch: ship steers toward the touch point and auto-fires while touching */
   let touchTarget = null;
@@ -102,9 +115,9 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
     if (state !== 'playing') return;
 
     // Ship controls
-    if (keys.ArrowLeft || keys.KeyA) ship.angle -= 3.5 * dt;
-    if (keys.ArrowRight || keys.KeyD) ship.angle += 3.5 * dt;
-    if (keys.ArrowUp || keys.KeyW) {
+    if (keys.ArrowLeft || keys.KeyA || touchMove.left) ship.angle -= 3.5 * dt;
+    if (keys.ArrowRight || keys.KeyD || touchMove.right) ship.angle += 3.5 * dt;
+    if (keys.ArrowUp || keys.KeyW || touchMove.thrust) {
       const a = ship.angle; ship.vx += Math.cos(a) * 280 * dt; ship.vy += Math.sin(a) * 280 * dt;
       shared.spawnParticles({ x: ship.x - Math.cos(a)*16, y: ship.y - Math.sin(a)*16, count: 2, color: C.ice2, speed: 30, life: 0.15, size: 2 });
     }
@@ -120,7 +133,7 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
       }
       shoot();
     }
-    if (keys.Space) shoot();
+    if (keys.Space || touchMove.fire) shoot();
 
     ship.vx *= 0.985; ship.vy *= 0.985;
     ship.x += ship.vx * dt; ship.y += ship.vy * dt; wrap(ship);

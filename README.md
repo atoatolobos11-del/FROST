@@ -113,9 +113,15 @@ button returns to it at any time.
 frost-breakout/
 ├── index.html              # markup + HUD + overlay screens
 ├── style.css               # tokens, layout, panels, responsive rules
+├── extras.css              # settings/levels/stats/achievements/howto/toasts
 ├── script.js               # engine: audio, entities, physics, renderer, input
+├── extras.js               # meta systems: settings, stats, achievements, modes, share
+├── editor.html             # visual level editor → saves to localStorage
+├── manifest.webmanifest    # PWA install metadata
+├── sw.js                   # offline-first service worker
+├── assets/icons/           # generated PWA icons (192/512/maskable)
 ├── games/
-│   ├── shell.html          # Frost Arcade selector + global HUD
+│   ├── shell.html          # Frost Arcade selector + search/favs/recent/bests
 │   ├── shared/             # FrostShared (audio/particles/storage/input),
 │   │                       # gameshell loader, arcade.css
 │   ├── frost-pong/         # 2P/AI pong module
@@ -129,6 +135,34 @@ frost-breakout/
     ├── sounds/             # 10 generated .wav effects (+ README)
     └── images/             # intentionally empty — everything is drawn (+ README)
 ```
+
+## 🆕 Meta systems (`extras.js` + `editor.html` + PWA)
+
+- **Settings** (⚙ in HUD + menu): difficulty Chill/Normal/Blizzard, volume slider,
+  toggles for screen shake / particles / flashes. Stored in
+  `frost-breakout:settings`, applied live to `Sound` + renderer.
+- **Stats**: per-level bests, per-mode bests (classic/daily/endless/custom),
+  total runs/bricks/power-ups/wins/best combo. Stored in `frost-breakout:meta`.
+- **Level select + Continue**: progressive unlock (maxLevel), autosave run to
+  `frost-breakout:run` on every level load, Continue button on menu.
+- **How to Play**: in-menu 5-step manual overlay.
+- **PWA**: `manifest.webmanifest` + `sw.js` offline cache + generated icons.
+  Install via browser menu; works offline after first load.
+- **Achievements**: 14 trophies (`frost-breakout:ach`) with toast popups,
+  driven by `fb:brick/powerup/level/levelclear/victory/shield` events from `script.js`.
+- **Daily / Endless / Custom**: mode buttons on menu. Daily seed = YYYYMMDD,
+  Endless generates `ENDLESS n` stages, Custom plays `frost-breakout:custom`
+  built in `editor.html` (`index.html?play=custom`).
+- **Share**: Web Share API → clipboard fallback + PNG snapshot download of canvas.
+- **Arcade hub**: search, All/Favorites/Recent filters, ★ favorites in
+  `frost-arcade:favs`, recent in `frost-arcade:recent`, unified bests
+  (breakout merges `frost-breakout:best` + arcade best), deep link `?game=pong`.
+- **Level editor**: paint 11-13×5-9 grids, 5 brick types + eraser, sample/fill/clear,
+  export/import JSON, Save + Play.
+
+Core hooks in `script.js`: `Sound.setVolume/getVolume`, `difficultyMult()`,
+`fxOn()/guardedShake()`, `window` events `fb:*`, `saveRun/loadRun/clearRun`,
+`startMode()/continueRun()`, endless/custom level builders.
 
 ## 🧩 How `script.js` is organised
 

@@ -92,6 +92,19 @@ export function destroy() {
     flippers.left.up = false; flippers.right.up = false;
   }
 
+  /* on-screen flipper + plunge buttons (built by the arcade shell) */
+  export function onTouchControl(name, on) {
+    if (name === 'plunge') {
+      if (!on) return;
+      if (state === 'gameover') { reset(); return; }
+      if (ballsInPlay === 0) launchBall(0.8);
+      return;
+    }
+    if (state === 'menu' && on) return;
+    if (name === 'left') flippers.left.up = on;
+    else if (name === 'right') flippers.right.up = on;
+  }
+
   function resize() { const dpr = Math.min(window.devicePixelRatio || 1, 2.5); canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
 
   function buildTable() {

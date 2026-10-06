@@ -52,10 +52,20 @@
 
   <section id="game-selector" class="selector" hidden>
     <h2 class="selector-title">Select Game</h2>
+    <div class="arcade-toolbar">
+      <input type="search" id="arcadeSearch" placeholder="🔍 Search games…" aria-label="Search games" />
+      <div class="arcade-filters" role="tablist" aria-label="Filter">
+        <button type="button" class="chip-btn active" data-filter="all">All</button>
+        <button type="button" class="chip-btn" data-filter="fav">★ Favorites</button>
+        <button type="button" class="chip-btn" data-filter="recent">🕘 Recent</button>
+      </div>
+    </div>
     <div class="selector-grid"></div>
+    <p class="arcade-meta" id="arcadeMeta"></p>
   </section>
 
   <section id="game-host" class="game-host" hidden></section>
+  <div class="touch-controls" id="touchControls" hidden></div>
 
 </main>
 

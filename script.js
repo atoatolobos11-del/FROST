@@ -154,6 +154,9 @@
     const buffers = {};
     const lastPlay = {};
     let muted = false;
+    let volume = 0.8;
+    try { const sv = parseFloat(localStorage.getItem('frost-breakout:volume')); if (!isNaN(sv)) volume = Math.min(1, Math.max(0, sv)); } catch (e) { /* ignore */ }
+    function applyGain() { if (master) master.gain.value = muted ? 0 : 0.55 * volume; }
 
     function init() {
       if (ac) return true;
@@ -163,7 +166,7 @@
       const comp = ac.createDynamicsCompressor();
       comp.threshold.value = -14; comp.knee.value = 22; comp.ratio.value = 8;
       master = ac.createGain();
-      master.gain.value = 0.55;
+      master.gain.value = muted ? 0 : 0.55 * volume;
       master.connect(comp);
       comp.connect(ac.destination);
 
@@ -305,9 +308,15 @@
       sampleNames: function () { return Object.keys(buffers); },
       setMuted: function (v) {
         muted = v;
-        if (master) master.gain.value = v ? 0 : 0.55;
+        applyGain();
       },
       isMuted: function () { return muted; },
+      setVolume: function (v) {
+        volume = Math.min(1, Math.max(0, Number(v) || 0));
+        try { localStorage.setItem('frost-breakout:volume', String(volume)); } catch (e) { /* ignore */ }
+        applyGain();
+      },
+      getVolume: function () { return volume; },
     };
   })();
 
@@ -496,6 +505,7 @@
 
   /* --------------------------------------------------------- Particles ---- */
   function spawnShatter(b, hx, hy, nx, ny, amount) {
+    if (!fxOn('particles')) return;
     const a = b.type.aura;
     for (let i = 0; i < amount; i++) {
       const ang = rand(TAU);
@@ -554,6 +564,7 @@
   }
 
   function spawnBurst(x, y, rgb, amount, power) {
+    if (!fxOn('particles')) amount = Math.min(amount, 4);
     for (let i = 0; i < amount; i++) {
       const ang = rand(TAU), sp = rand(1, 0.25) * (power || 300);
       G.particles.push({
@@ -596,6 +607,31 @@
     try { localStorage.setItem(MUTED_KEY, v ? '1' : '0'); } catch (e) { /* private mode */ }
   }
 
+  /* --- extended settings / event bus (added for extras: settings, achievements) --- */
+  function loadJSON(key, fb) {
+    try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : fb; } catch (e) { return fb; }
+  }
+  function emit(name, detail) {
+    try { window.dispatchEvent(new CustomEvent('fb:' + name, { detail: detail || {} })); } catch (e) { /* ignore */ }
+  }
+  function getSettings() {
+    const s = loadJSON('frost-breakout:settings', {});
+    return {
+      difficulty: s.difficulty || 'normal',
+      volume: (typeof s.volume === 'number' ? s.volume : Sound.getVolume()),
+      shake: (s.shake !== false),
+      particles: (s.particles !== false),
+      flash: (s.flash !== false),
+    };
+  }
+  function difficultyMult() {
+    const d = getSettings().difficulty;
+    return d === 'chill' ? 0.85 : d === 'blizzard' ? 1.18 : 1;
+  }
+  function fxOn(kind) { return getSettings()[kind] !== false; }
+  function guardedShake(v) { if (fxOn('shake')) G.shake = Math.max(G.shake, v); }
+  function effectiveSpeed(base) { return base * difficultyMult(); }
+
   const G = {
     state: 'menu',            // menu | serve | play | levelclear | dying | gameover | victory
     stateT: 0,
@@ -613,6 +649,8 @@
     flash: 0,
     flashColor: C.ice,
     shake: 0,
+    mode: 'classic',        // classic | daily | endless | custom
+    endlessDepth: 0,
     paddle: new Paddle(),
     balls: [],
     bricks: [],
@@ -755,39 +793,127 @@
 
   function newBallOnPaddle() {
     const p = G.paddle;
-    const b = new Ball(p.x, p.y, LEVELS[G.level - 1].speed, -Math.PI / 2);
+    const base = (G.customSpeed || LEVELS[G.level - 1].speed);
+    const b = new Ball(p.x, p.y, effectiveSpeed(base), -Math.PI / 2);
     b.dx = 0;
     b.followPaddle(p);
     G.balls = [b];
   }
 
-  function startGame() {
-    G.score = 0;
-    G.lives = START_LIVES;
-    G.level = 1;
-    G.bricksBroken = 0;
+  function startGame(opts) {
+    opts = opts || {};
+    G.mode = opts.mode || 'classic';
+    G.endlessDepth = 0;
+    G.customSpeed = opts.speed || null;
+    G.customBricks = opts.bricks || null;
+    G.score = (opts.score || 0);
+    G.lives = (opts.lives != null ? opts.lives : START_LIVES);
+    G.level = (opts.level || 1);
+    G.bricksBroken = (opts.bricksBroken || 0);
     G.combo = 0;
-    G.bestCombo = 0;
+    G.bestCombo = (opts.bestCombo || 0);
     G.dryCounter = 0;
     G.powerups.length = 0;
     G.particles.length = 0;
     G.rings.length = 0;
     G.texts.length = 0;
     G.paddle = new Paddle();
-    loadLevel(1);
+    emit('runstart', { mode: G.mode, level: G.level });
+    loadLevel(G.level, { keepMode: true });
   }
 
-  function loadLevel(level) {
+  function buildEndlessLevel(depth) {
+    const names = ['ENDLESS DRIFT', 'GLACIER MAZE', 'FROST SURGE', 'DEEP WINTER'];
+    const patterns = Object.keys(PATTERNS);
+    const pat = patterns[(depth + ((Math.random() * patterns.length) | 0)) % patterns.length];
+    const lvl = Math.min(LEVELS.length, 3 + Math.floor(depth / 2));
+    const cfg = LEVELS[lvl - 1];
+    const cols = 11 + (depth % 3);
+    const rows = Math.min(9, cfg.rows + Math.floor(depth / 3));
+    const padX = 16, gapX = 6, gapY = 7;
+    const cw = (PLAY.w - padX * 2 - gapX * (cols - 1)) / cols;
+    const ch = 24;
+    const top = PLAY.y + 54;
+    const mask = PATTERNS[pat];
+    const bricks = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (!mask(c, r, cols, rows)) continue;
+        const type = pickType(Math.min(8, 2 + depth), c, r, cols, rows);
+        bricks.push(new Brick(PLAY.x + padX + c * (cw + gapX), top + r * (ch + gapY), cw, ch, type));
+      }
+    }
+    G.bricks = bricks;
+    G.bricksTotal = bricks.filter(function (b) { return !b.indestructible; }).length;
+    brickGlowDirty = true;
+    return names[depth % names.length] + ' · ' + (depth + 1);
+  }
+
+  function loadLevel(level, opts) {
+    opts = opts || {};
+    if (!opts.keepMode && !G.mode) G.mode = 'classic';
+    if (G.mode === 'endless' && !opts.keepMode) { /* endless advances via depth */ }
     G.level = level;
-    buildLevel(level);
+    if (G.customBricks && G.mode === 'custom') {
+      const padX = 16, gapX = 6, gapY = 7;
+      const cols = G.customBricks.cols, rows = G.customBricks.rows;
+      const cw = (PLAY.w - padX * 2 - gapX * (cols - 1)) / cols;
+      const ch = 24;
+      const top = PLAY.y + 54;
+      G.bricks = [];
+      G.customBricks.cells.forEach(function (cell) {
+        const t = BT[cell.t] || BT.glacier;
+        G.bricks.push(new Brick(PLAY.x + padX + cell.c * (cw + gapX), top + cell.r * (ch + gapY), cw, ch, t));
+      });
+      G.bricksTotal = G.bricks.filter(function (b) { return !b.indestructible; }).length;
+      brickGlowDirty = true;
+    } else if (G.mode === 'endless' && opts.endless) {
+      const label = buildEndlessLevel(G.endlessDepth);
+      G.paddle.power = 0;
+      G.paddle.w = G.paddle.baseW;
+      G.shield = 0;
+      G.combo = 0;
+      G.powerups.length = 0;
+      newBallOnPaddle();
+      showBanner('ENDLESS ' + (G.endlessDepth + 1), label);
+      setState('serve');
+      emit('level', { level: G.level, endless: G.endlessDepth, mode: G.mode });
+      autosave();
+      return;
+    } else if (G.mode === 'daily' && G.dailySeed) {
+      buildLevel(((G.dailySeed % LEVELS.length) + LEVELS.length) % LEVELS.length + 1);
+      // daily = fixed layout + slightly faster ball for challenge
+      G.bricksTotal = G.bricks.filter(function (b) { return !b.indestructible; }).length;
+    } else {
+      buildLevel(level);
+    }
     G.paddle.power = 0;
     G.paddle.w = G.paddle.baseW;
     G.shield = 0;
     G.combo = 0;
     G.powerups.length = 0;
     newBallOnPaddle();
-    showBanner('LEVEL ' + level, LEVELS[level - 1].name);
+    const lname = (G.mode === 'custom' && G.customName) ? G.customName : LEVELS[Math.min(level, LEVELS.length) - 1].name;
+    showBanner((G.mode === 'classic' ? 'LEVEL ' + level : G.mode.toUpperCase() + ' · ' + level), lname);
     setState('serve');
+    emit('level', { level: level, mode: G.mode });
+    autosave();
+  }
+
+  function saveRun() {
+    try {
+      const data = { mode: G.mode, level: G.level, score: G.score, lives: G.lives, bricksBroken: G.bricksBroken, bestCombo: G.bestCombo, endlessDepth: G.endlessDepth, t: Date.now() };
+      localStorage.setItem('frost-breakout:run', JSON.stringify(data));
+      return data;
+    } catch (e) { return null; }
+  }
+  function loadRun() {
+    return loadJSON('frost-breakout:run', null);
+  }
+  function clearRun() { try { localStorage.removeItem('frost-breakout:run'); } catch (e) { /* ignore */ } }
+  function autosave() {
+    if (G.state === 'menu') return;
+    if (G.mode === 'classic' || G.mode === 'endless') saveRun();
   }
 
   function showBanner(title, sub, hold) {
@@ -860,7 +986,8 @@
       G.bricksBroken++;
       spawnShatter(b, b.x + b.w / 2, b.y + b.h / 2, n.nx, n.ny, 16);
       spawnRing(b.x + b.w / 2, b.y + b.h / 2, b.type.aura, 4, b.w * 1.5, 0.45, 3);
-      G.shake = Math.max(G.shake, 4);
+      guardedShake(4);
+      emit('brick', { type: b.type.label, score: b.type.score, combo: G.combo, level: G.level });
 
       const mult = comboMult();
       addScore(b.type.score * mult);
@@ -919,13 +1046,13 @@
   }
 
   function beginLevelClear() {
-    const bonus = 400 * G.level;
+    const bonus = 400 * G.level + (G.mode === 'endless' ? 200 * G.endlessDepth : 0);
     addScore(bonus);
     spawnText(W / 2, PLAY.y + PLAY.h * 0.62, '+' + bonus, C.ice, 30, 70);
     Sound.play('level');
-    G.flash = 0.55;
-    G.flashColor = C.ice;
-    G.shake = 6;
+    if (fxOn('flash')) { G.flash = 0.55; G.flashColor = C.ice; }
+    guardedShake(6);
+    emit('levelclear', { level: G.level, mode: G.mode, endlessDepth: G.endlessDepth, score: G.score });
     /* celebratory ice storm */
     for (let i = 0; i < 26; i++) {
       const x = rand(PLAY.right - 10, PLAY.x + 10), y = rand(PLAY.bottom - 20, PLAY.y + 10);
@@ -1025,7 +1152,7 @@
         Sound.play('paddle');
         spawnIceChips(ball.x, p.y - p.h / 2, 0, -1, C.cyan, 7);
         spawnRing(ball.x, p.y - p.h / 2, C.cyan, 3, 30, 0.3, 2);
-        G.shake = Math.max(G.shake, 2);
+        guardedShake(2);
       }
 
       /* power-ups */
@@ -1042,6 +1169,7 @@
   }
 
   function spawnIceChips(x, y, nx, ny, color, amount) {
+    if (!fxOn('particles')) return;
     color = color || C.ice;
     for (let i = 0; i < (amount || 4); i++) {
       const ang = Math.atan2(ny || rand(1, -1), nx || rand(1, -1));
@@ -1063,10 +1191,10 @@
     spawnText(pu.x, pu.y - 10, '+150', pu.def.color, 18);
     spawnRing(pu.x, pu.y, pu.def.color, 6, 78, 0.5, 3);
     spawnBurst(pu.x, pu.y, pu.def.color, 16, 320);
-    G.flash = Math.max(G.flash, 0.28);
-    G.flashColor = pu.def.color;
-    G.shake = Math.max(G.shake, 4);
+    if (fxOn('flash')) { G.flash = Math.max(G.flash, 0.28); G.flashColor = pu.def.color; }
+    guardedShake(4);
     Sound.play('powerup');
+    emit('powerup', { key: k, x: pu.x, y: pu.y });
 
     if (k === 'multi') {
       const src = G.balls.filter(function (b) { return !b.stuck; });
@@ -1086,7 +1214,8 @@
       addScore(60);
     } else if (k === 'fast') {
       G.balls.forEach(function (b) {
-        b.baseSpeed = Math.min(b.baseSpeed * 1.16, LEVELS[G.level - 1].speed * 1.75);
+        const cap = effectiveSpeed(LEVELS[Math.min(G.level, LEVELS.length) - 1].speed * 1.75);
+        b.baseSpeed = Math.min(b.baseSpeed * 1.16, cap);
         if (!b.stuck) b.setSpeed(b.baseSpeed);
       });
       addScore(60);
@@ -1106,16 +1235,19 @@
     G.combo = 0;
     G.lives -= 1;
     syncUI();
+    emit('lifelost', { lives: G.lives, level: G.level, mode: G.mode });
     if (G.lives <= 0) {
       Sound.play('gameover');
       spawnBurst(W / 2, PLAY.bottom - 30, C.blue, 26, 380);
       setState('gameover');
-      G.flash = 0.4;
-      G.flashColor = [40, 90, 160];
+      if (fxOn('flash')) { G.flash = 0.4; G.flashColor = [40, 90, 160]; }
+      clearRun();
+      emit('gameover', { score: G.score, level: G.level, bricksBroken: G.bricksBroken, bestCombo: G.bestCombo, mode: G.mode });
     } else {
       Sound.play('life');
       newBallOnPaddle();
       setState('serve');
+      autosave();
     }
   }
 
@@ -1179,7 +1311,18 @@
       case 'play': updatePlay(dt); break;
       case 'levelclear':
         if (G.stateT > 2.1) {
-          if (G.level >= LEVELS.length) setState('victory');
+          if (G.mode === 'endless') {
+            G.endlessDepth++;
+            addScore(250);
+            loadLevel(G.level, { keepMode: true, endless: true });
+          } else if (G.mode === 'daily') {
+            setState('victory');
+            emit('victory', { score: G.score, mode: G.mode, level: G.level, bricksBroken: G.bricksBroken, bestCombo: G.bestCombo });
+            clearRun();
+          } else if (G.mode === 'custom') {
+            setState('victory');
+            emit('victory', { score: G.score, mode: G.mode, level: G.level, bricksBroken: G.bricksBroken, bestCombo: G.bestCombo });
+          } else if (G.level >= LEVELS.length) { setState('victory'); emit('victory', { score: G.score, mode: G.mode, level: G.level, bricksBroken: G.bricksBroken, bestCombo: G.bestCombo }); clearRun(); }
           else loadLevel(G.level + 1);
         }
         break;
@@ -1228,8 +1371,9 @@
         /* the frost shield catches the fall */
         G.shield = 0;
         Sound.play('shield');
-        G.flash = 0.5; G.flashColor = [190, 215, 255];
-        G.shake = 9;
+        if (fxOn('flash')) { G.flash = 0.5; G.flashColor = [190, 215, 255]; }
+        guardedShake(9);
+        emit('shield', { level: G.level });
         spawnRing(p.x, PLAY.bottom - 6, [200, 225, 255], 10, 260, 0.6, 4);
         spawnBurst(p.x, PLAY.bottom - 6, [200, 225, 255], 30, 420);
         showBanner('SHIELD ABSORBED', 'The ice bought you a life', 1.4);
@@ -2167,7 +2311,7 @@
     drawShieldField();
 
     /* full-screen flash */
-    if (G.flash > 0.01) {
+    if (G.flash > 0.01 && fxOn('flash')) {
       ctx.globalCompositeOperation = 'lighter';
       ctx.fillStyle = rgba(G.flashColor, G.flash * 0.22);
       ctx.fillRect(0, 0, W, H);
@@ -2481,6 +2625,7 @@
   setState = function (s) {
     _setState(s);
     if (s === 'gameover' || s === 'victory') fillEndScreen();
+    emit('state', { state: s, level: G.level, score: G.score, mode: G.mode });
   };
 
   /* --- game loop ----------------------------------------------------------- */
@@ -2521,14 +2666,43 @@
         shield: Math.round(G.shield * 10) / 10, paddleW: Math.round(G.paddle.w),
         ballSpeed: G.balls.length ? Math.round(Math.hypot(G.balls[0].vx, G.balls[0].vy)) : 0,
         types: types,
+        mode: G.mode, endlessDepth: G.endlessDepth,
       };
     },
     samples: function () { return Sound.sampleNames(); },
     muted: function () { return Sound.isMuted(); },
-    start: function () { startGame(); },
+    setVolume: function (v) { Sound.setVolume(v); },
+    getVolume: function () { return Sound.getVolume(); },
+    getSettings: function () { return getSettings(); },
+    start: function (opts) { startGame(opts); },
+    startMode: function (mode, extra) {
+      extra = extra || {};
+      if (mode === 'daily') {
+        const d = new Date(); const seed = d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+        G.dailySeed = seed;
+        startGame({ mode: 'daily', level: 1 });
+        return seed;
+      }
+      if (mode === 'endless') { G.endlessDepth = 0; startGame({ mode: 'endless', level: 1 }); loadLevel(1, { keepMode: true, endless: true }); return 0; }
+      if (mode === 'custom' && extra.bricks) {
+        G.customBricks = extra.bricks; G.customName = extra.name || 'CUSTOM'; G.customSpeed = extra.speed || null;
+        startGame({ mode: 'custom', level: 1, speed: G.customSpeed, bricks: G.customBricks });
+        return 0;
+      }
+      startGame({ mode: 'classic' });
+    },
     restart: function () { restart(); },
     launch: function () { launchBalls(); },
-    goto: function (n) { G.balls = []; loadLevel(clamp(n | 0, 1, LEVELS.length)); },
+    goto: function (n) { G.balls = []; G.mode = G.mode || 'classic'; loadLevel(clamp(n | 0, 1, LEVELS.length)); },
+    saveRun: saveRun, loadRun: loadRun, clearRun: clearRun,
+    continueRun: function () {
+      const r = loadRun();
+      if (!r) return false;
+      G.mode = r.mode || 'classic'; G.endlessDepth = r.endlessDepth || 0;
+      startGame({ mode: G.mode, level: r.level, score: r.score, lives: r.lives, bricksBroken: r.bricksBroken, bestCombo: r.bestCombo });
+      if (G.mode === 'endless') loadLevel(r.level, { keepMode: true, endless: true });
+      return true;
+    },
     clearLevel: function () {
       G.bricks = G.bricks.filter(function (b) { return b.indestructible; });
       checkLevelCleared();

@@ -737,15 +737,108 @@ kbd {
 
 @media (max-width: 720px) {
   .legend { display: none; }
-}
 
-@media (max-width: 640px) {
-  .chip { padding: 4px 9px 4px 6px; gap: 7px; }
-  .chip-ico { width: 22px; height: 22px; font-size: 12px; }
-  .chip-lab { font-size: 8.5px; }
-  .icon-btn { width: 34px; height: 34px; font-size: 13px; }
+  /* Mobile HUD: Separate Navigation Actions and In-Game Stats to prevent overlapping */
+  .hud {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  /* Navigation Bar (Sound, Fullscreen, Select Games, Pause, Retry) */
+  .hud-actions {
+    order: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 8px;
+    padding-bottom: 7px;
+    border-bottom: 1px solid rgba(130, 200, 250, .14);
+  }
+
+  .hud-actions .icon-btn {
+    flex: 1 1 0;
+    max-width: 58px;
+    height: 38px;
+    font-size: 15px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Game Stats Bar (Score, Level, Lives, Combo) */
+  .hud-stats {
+    order: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 6px;
+  }
+
+  .hud-stats .chip {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 6px;
+    gap: 6px;
+    border-radius: 10px;
+  }
+
+  .chip-ico {
+    width: 22px;
+    height: 22px;
+    font-size: 11px;
+    border-radius: 6px;
+    flex: none;
+  }
+
+  .chip-body {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.05;
+  }
+
+  .chip-lab {
+    font-size: 8px;
+    letter-spacing: .08em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .chip-val {
+    font-size: 14px;
+    font-weight: 800;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .lives {
+    gap: 3px;
+    font-size: 13px;
+  }
+
   .power-legend li span { display: none; }
   .power-legend li { padding: 6px 9px; }
+}
+
+@media (max-width: 380px) {
+  .hud { padding: 6px 8px; gap: 6px; }
+  .hud-actions { gap: 6px; padding-bottom: 5px; }
+  .hud-actions .icon-btn { height: 34px; font-size: 13px; border-radius: 8px; }
+  .hud-stats { gap: 4px; }
+  .hud-stats .chip { padding: 4px 4px; gap: 4px; border-radius: 8px; }
+  .chip-ico { width: 18px; height: 18px; font-size: 10px; }
+  .chip-lab { font-size: 7.5px; }
+  .chip-val { font-size: 12px; }
 }
 
 /* Touch-first layout: show on-screen controls. The width fallback covers
@@ -758,14 +851,46 @@ kbd {
 @media (max-height: 560px) {
   .shell { width: min(1120px, 100%, calc((100dvh - 130px) * 1.5)); }
   .legend { display: none; }
-  /* compact HUD so nothing overflows on short landscape screens */
-  .hud { padding: 5px 7px; gap: 6px; }
-  .hud-stats { gap: 5px; }
-  .chip { padding: 3px 7px 3px 4px; gap: 5px; border-radius: 9px; }
+  /* compact single-row HUD so nothing overflows on short landscape screens */
+  .hud {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 7px;
+    gap: 8px;
+  }
+  .hud-actions {
+    order: 2;
+    width: auto;
+    padding-bottom: 0;
+    border-bottom: none;
+    gap: 5px;
+    flex: none;
+  }
+  .hud-actions .icon-btn {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    font-size: 12px;
+    border-radius: 9px;
+  }
+  .hud-stats {
+    order: 1;
+    width: auto;
+    gap: 5px;
+    flex: 1;
+    min-width: 0;
+    justify-content: flex-start;
+  }
+  .hud-stats .chip {
+    flex: 0 1 auto;
+    padding: 3px 7px 3px 4px;
+    gap: 5px;
+    border-radius: 9px;
+  }
   .chip-ico { width: 20px; height: 20px; font-size: 11px; border-radius: 6px; }
   .chip-lab { display: none; }
   .chip-val { font-size: 14px; }
-  .icon-btn { width: 30px; height: 30px; font-size: 12px; border-radius: 9px; }
   .ico-restart { font-size: 16px; }
   .touch-bar { gap: 6px; }
   .tbtn { height: 46px; }
