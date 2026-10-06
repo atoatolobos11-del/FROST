@@ -50,9 +50,27 @@ open the printed LAN URL (e.g. `http://192.168.1.20:8080`).
 | Launch / confirm      | `Space` / `Enter`                | tap the arena, or the ❄️ button  |
 | Pause / resume        | `P` or `Esc`                    | ❚❚ button                        |
 | Restart               | `R`                             | ↻ button                         |
-| Mute / unmute         | `M`                             | 🔊 button                        |
+| Mute / unmute         | `M` (choice is remembered)      | 🔊 button                        |
+| Fullscreen            | `F`                             | ⛶ button                         |
+| Quit to menu          | —                               | red Quit button on pause / end screens |
+| Frost Arcade          | —                               | 🏪 button opens the game selector |
 
 On phones and tablets an on-screen control bar appears automatically.
+
+## 🕹️ Frost Arcade (`games/shell.html`)
+
+The same project also ships a mini arcade with **4 extra games** sharing one
+audio/particle/storage engine (`games/shared/`):
+
+| Game | Controls |
+| ---- | -------- |
+| 🏓 Frost Pong | `W`/`S` + `↑`/`↓`, drag each half on touch, `1`/`2` toggle AI |
+| 🐍 Frost Snake | arrows / swipe, `Space` or tap to start |
+| ☄️ Frost Asteroids | arrows/`WASD` + `Space`, or touch to steer + autofire |
+| 🎱 Frost Pinball | `←`/`→` or `A`/`D` flippers, `Space` plunger, touch halves |
+
+Open `games/shell.html` (or the 🏪 button in-game) for the selector; the 🏠
+button returns to it at any time.
 
 ## ✨ Features
 
@@ -96,6 +114,14 @@ frost-breakout/
 ├── index.html              # markup + HUD + overlay screens
 ├── style.css               # tokens, layout, panels, responsive rules
 ├── script.js               # engine: audio, entities, physics, renderer, input
+├── games/
+│   ├── shell.html          # Frost Arcade selector + global HUD
+│   ├── shared/             # FrostShared (audio/particles/storage/input),
+│   │                       # gameshell loader, arcade.css
+│   ├── frost-pong/         # 2P/AI pong module
+│   ├── frost-snake/        # snake module
+│   ├── frost-asteroids/    # asteroids module
+│   └── frost-pinball/      # pinball module
 ├── tools/
 │   ├── serve.mjs            # dependency-free local static server
 │   └── generate-sounds.mjs  # dependency-free WAV generator
