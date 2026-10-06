@@ -248,7 +248,7 @@ export default (function () {
     ctx.setLineDash([]);
 
     // Paddles
-    drawPaddle(20, left.y, side === 'left' ? false : true);
+    drawPaddle(20, left.y);
     drawPaddle(W - 20 - PADDLE_W, right.y);
 
     // Ball
@@ -297,6 +297,7 @@ export default (function () {
     g.fillStyle = 'rgba(232,250,255,0.3)';
     rrPath(g, x + 2, y + 2, PADDLE_W - 4, PADDLE_H - 4, r - 2);
     g.fill();
+  }
   }
 
   function drawOverlay(title, subtitle) {
