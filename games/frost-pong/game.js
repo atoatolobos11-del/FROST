@@ -36,6 +36,11 @@ const keys = { KeyW: false, KeyS: false, ArrowUp: false, ArrowDown: false };
 let touchL = null, touchR = null; // touch-drag paddle targets (canvas Y)
 let keyL = 0, keyR = 0; // on-screen button state: -1 up, +1 down
 
+/* global arcade settings */
+let diffCache = 1;
+function diffMult() { try { return (shared && shared.difficultyMult) ? shared.difficultyMult() : 1; } catch (e) { return 1; } }
+function kick(v) { if (shared && shared.fxOn && !shared.fxOn('shake')) return; shake = Math.max(shake, v); }
+
 function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
 
 function rrPath(g, x, y, w, h, r) {
@@ -72,7 +77,7 @@ function hitPaddle(side) {
     color: C.ice2, speed: 180, life: 0.4, size: 3,
     angle: side === 'left' ? 0 : Math.PI, cone: Math.PI / 2
   });
-  shake = 3;
+  kick(3);
 }
 
 function hitWall(x, y) {
@@ -88,7 +93,7 @@ function scorePoint(side) {
     color: side === 'left' ? C.ice : C.violet,
     speed: 250, life: 0.8, size: 4, gravity: 80
   });
-  shake = 12;
+  kick(12);
   if (left.score >= WIN_SCORE) { winner = 'left'; state = 'gameover'; }
   else if (right.score >= WIN_SCORE) { winner = 'right'; state = 'gameover'; }
   else { resetBall(); }
@@ -96,12 +101,14 @@ function scorePoint(side) {
 
 function resetBall() {
   ball.x = W / 2; ball.y = H / 2;
+  diffCache = diffMult();
   let angle = (Math.random() - 0.5) * Math.PI / 2;
   if (Math.abs(angle) < 0.25) angle = angle >= 0 ? 0.25 : -0.25; // no flat serves
   const dirn = Math.random() < 0.5 ? 1 : -1;
-  ball.vx = Math.cos(angle) * BALL_BASE_SPEED * dirn;
-  ball.vy = Math.sin(angle) * BALL_BASE_SPEED;
-  ball.speed = BALL_BASE_SPEED;
+  const base = BALL_BASE_SPEED * diffCache; // global difficulty setting
+  ball.vx = Math.cos(angle) * base * dirn;
+  ball.vy = Math.sin(angle) * base;
+  ball.speed = base;
 }
 
 function resetMatch() {
@@ -285,7 +292,7 @@ function update(dt) {
     if (ball.y >= right.y && ball.y <= right.y + PADDLE_H) hitPaddle('right');
     else if (ball.x > W + BALL_SIZE * 2) scorePoint('left');
   }
-  ball.speed = Math.min(ball.speed * 1.008, MAX_SPEED);
+  ball.speed = Math.min(ball.speed * 1.008, MAX_SPEED * diffCache);
   const sp = Math.hypot(ball.vx, ball.vy) || ball.speed;
   ball.vx = (ball.vx / sp) * ball.speed;
   ball.vy = (ball.vy / sp) * ball.speed;

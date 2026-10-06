@@ -12,13 +12,65 @@ const buffers = {};
 let muted = false;
 let volume = 0.8;
 
+/* ─── Global settings (shared by every game in the system) ───
+ * Single source of truth: `frost-arcade:settings`.
+ * The legacy main-game key `frost-breakout:settings` is read as a fallback
+ * so existing players keep their choices; new writes go to the global key. */
+const SETTINGS_KEY = 'frost-arcade:settings';
+const LEGACY_SETTINGS_KEY = 'frost-breakout:settings';
+const SETTINGS_DEFAULTS = { difficulty: 'normal', volume: 0.8, shake: true, particles: true, flash: true, muted: false };
+
+function readJSON(key) {
+  try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : null; } catch (e) { return null; }
+}
+
+export function getSettings() {
+  const g = readJSON(SETTINGS_KEY) || {};
+  const l = readJSON(LEGACY_SETTINGS_KEY) || {};
+  const v = (x) => (typeof x === 'number' && !isNaN(x) ? Math.min(1, Math.max(0, x)) : null);
+  return {
+    difficulty: g.difficulty || l.difficulty || SETTINGS_DEFAULTS.difficulty,
+    volume: v(g.volume) ?? v(l.volume) ?? SETTINGS_DEFAULTS.volume,
+    shake: (g.shake ?? l.shake ?? SETTINGS_DEFAULTS.shake) !== false,
+    particles: (g.particles ?? l.particles ?? SETTINGS_DEFAULTS.particles) !== false,
+    flash: (g.flash ?? l.flash ?? SETTINGS_DEFAULTS.flash) !== false,
+    muted: !!(g.muted ?? (l.muted === true) ?? SETTINGS_DEFAULTS.muted),
+  };
+}
+
+export function saveSettings(patch) {
+  const next = Object.assign(getSettings(), patch || {});
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(next)); } catch (e) { /* private mode */ }
+  volume = next.volume;
+  muted = !!next.muted;
+  if (MasterGain) MasterGain.gain.value = muted ? 0 : 0.7 * volume;
+  return next;
+}
+
+export function difficultyMult() {
+  const d = getSettings().difficulty;
+  return d === 'chill' ? 0.85 : d === 'blizzard' ? 1.18 : 1;
+}
+
+export function fxOn(kind) {
+  const s = getSettings();
+  return kind === 'shake' ? !!s.shake : kind === 'particles' ? !!s.particles : kind === 'flash' ? !!s.flash : true;
+}
+
+/* Apply stored volume/mute at boot (before any AudioContext exists). */
+try {
+  const s = getSettings();
+  volume = s.volume;
+  muted = !!s.muted;
+} catch (e) { /* ignore */ }
+
 function getAudioContext() {
   if (AudioCtx) return AudioCtx;
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return null;
   AudioCtx = new AC();
   MasterGain = AudioCtx.createGain();
-  MasterGain.gain.value = 0.7 * volume;
+  MasterGain.gain.value = muted ? 0 : 0.7 * volume;
   Compressor = AudioCtx.createDynamicsCompressor();
   Compressor.threshold.value = -18;
   Compressor.knee.value = 12;
@@ -105,13 +157,17 @@ export function loadSamples(manifest) {
 export function setMuted(v) {
   muted = v;
   if (MasterGain) MasterGain.gain.value = v ? 0 : 0.7 * volume;
+  try {
+    const cur = readJSON(SETTINGS_KEY) || {};
+    cur.muted = !!v;
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(Object.assign(getSettings(), cur)));
+  } catch (e) { /* private mode */ }
 }
 
 export function isMuted() { return muted; }
 
 export function setVolume(v) {
-  volume = Math.min(1, Math.max(0, Number(v) || 0));
-  if (MasterGain && !muted) MasterGain.gain.value = 0.7 * volume;
+  saveSettings({ volume: Math.min(1, Math.max(0, Number(v) || 0)) });
 }
 export function getVolume() { return volume; }
 
@@ -147,6 +203,7 @@ function getParticle() {
 }
 
 export function spawnParticles(opts) {
+  if (!fxOn('particles')) return; // global FX toggle — one choke point for all arcade games
   const { x, y, count = 10, color = '#fff', speed = 120, spread = Math.PI * 2,
           life = 0.6, size = 2, gravity = 0, angle = 0, cone = Math.PI * 2 } = opts;
   for (let i = 0; i < count; i++) {

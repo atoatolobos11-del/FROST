@@ -16,6 +16,11 @@
   const BULLET_CAP = 100, ENEMY_CAP = 80, PARTICLE_CAP = 500;
   let score = 0, highScore = 0, lives = 3, wave = 1, waveTimer = 0;
   let state = 'menu', shake = 0, screenFlash = 0;
+
+  /* global arcade settings */
+  function diffMult() { try { return (shared && shared.difficultyMult) ? shared.difficultyMult() : 1; } catch (e) { return 1; } }
+  function kick(v) { if (shared && shared.fxOn && !shared.fxOn('shake')) return; shake = Math.max(shake, v); }
+  function flash(v) { if (shared && shared.fxOn && !shared.fxOn('flash')) return; screenFlash = Math.max(screenFlash, v); }
   let shipInvuln = 0, rapidFire = 0, spreadShot = 0, shield = 0;
   let boss = null, bossActive = false;
 
@@ -232,7 +237,7 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
         ai = (e, dt) => { e.cooldown = Math.max(0, e.cooldown - dt); if (e.cooldown <= 0 && dist(e, ship) < 400) { enemyShoot(e); e.cooldown = 1.5; } };
         break;
     }
-    enemies.push({ x, y, vx: (Math.random()-0.5)*speed, vy: (Math.random()-0.5)*speed, size, health, maxHealth: health, color, spin, type, ai, cooldown: Math.random()*1.5 });
+    enemies.push({ x, y, vx: (Math.random()-0.5)*speed*diffMult(), vy: (Math.random()-0.5)*speed*diffMult(), size, health, maxHealth: health, color, spin, type, ai, cooldown: Math.random()*1.5 });
   }
 
   function spawnBoss() {
@@ -270,7 +275,7 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
     waveTimer = 3;
     shared.tone({ f0: 440, f1: 660, f2: 880, f3: 1320, dur: 1, vol: 0.4, type: 'sine' });
     shared.spawnParticles({ x: W/2, y: H/2, count: 60, color: C.gold, speed: 300, life: 1.5, size: 6, gravity: 50 });
-    shake = 20; screenFlash = 1;
+    kick(20); flash(1);
     spawnPickup(W/2, H/2, 'gold');
   }
 
@@ -312,7 +317,7 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
         if (Math.hypot(b.x - boss.x, b.y - boss.y) < boss.size) {
           bullets.splice(i, 1); boss.health -= b.dmg;
           shared.spawnParticles({ x: boss.x, y: boss.y, count: 4, color: C.violet, speed: 60, life: 0.2, size: 2 });
-          shake = 2;
+          kick(2);
         }
       }
     }
@@ -347,7 +352,7 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
   }
 
   function hitShip() {
-    lives--; shipInvuln = 2; ship.blink = 2; shake = 12; screenFlash = 0.5;
+    lives--; shipInvuln = 2; ship.blink = 2; kick(12); flash(0.5);
     shared.tone({ f0: 100, f1: 60, dur: 0.4, vol: 0.4, type: 'sawtooth' });
     shared.spawnParticles({ x: ship.x, y: ship.y, count: 30, color: C.red, speed: 250, life: 0.8, size: 5 });
     if (lives <= 0) { state = 'gameover'; shared.tone({ f0: 120, f1: 50, dur: 0.8, vol: 0.5, type: 'sawtooth' }); }

@@ -155,7 +155,11 @@
     const lastPlay = {};
     let muted = false;
     let volume = 0.8;
-    try { const sv = parseFloat(localStorage.getItem('frost-breakout:volume')); if (!isNaN(sv)) volume = Math.min(1, Math.max(0, sv)); } catch (e) { /* ignore */ }
+    try {
+      const gv = JSON.parse(localStorage.getItem('frost-arcade:settings') || 'null');
+      const sv = (gv && typeof gv.volume === 'number') ? gv.volume : parseFloat(localStorage.getItem('frost-breakout:volume'));
+      if (!isNaN(sv)) volume = Math.min(1, Math.max(0, sv));
+    } catch (e) { /* ignore */ }
     function applyGain() { if (master) master.gain.value = muted ? 0 : 0.55 * volume; }
 
     function init() {
@@ -313,7 +317,12 @@
       isMuted: function () { return muted; },
       setVolume: function (v) {
         volume = Math.min(1, Math.max(0, Number(v) || 0));
-        try { localStorage.setItem('frost-breakout:volume', String(volume)); } catch (e) { /* ignore */ }
+        try {
+          localStorage.setItem('frost-breakout:volume', String(volume));
+          const g = loadJSON('frost-arcade:settings', {});
+          g.volume = volume;
+          localStorage.setItem('frost-arcade:settings', JSON.stringify(Object.assign(loadJSON('frost-breakout:settings', {}), g)));
+        } catch (e) { /* ignore */ }
         applyGain();
       },
       getVolume: function () { return volume; },
@@ -601,10 +610,19 @@
     try { localStorage.setItem(BEST_KEY, String(v)); } catch (e) { /* private mode */ }
   }
   function loadMuted() {
-    try { return localStorage.getItem(MUTED_KEY) === '1'; } catch (e) { return false; }
+    try {
+      const g = JSON.parse(localStorage.getItem('frost-arcade:settings') || 'null');
+      if (g && typeof g.muted === 'boolean') return g.muted;
+      return localStorage.getItem(MUTED_KEY) === '1';
+    } catch (e) { return false; }
   }
   function saveMuted(v) {
-    try { localStorage.setItem(MUTED_KEY, v ? '1' : '0'); } catch (e) { /* private mode */ }
+    try {
+      localStorage.setItem(MUTED_KEY, v ? '1' : '0');
+      const g = loadJSON('frost-arcade:settings', {});
+      g.muted = !!v;
+      localStorage.setItem('frost-arcade:settings', JSON.stringify(Object.assign(loadJSON('frost-breakout:settings', {}), g)));
+    } catch (e) { /* private mode */ }
   }
 
   /* --- extended settings / event bus (added for extras: settings, achievements) --- */
@@ -614,14 +632,18 @@
   function emit(name, detail) {
     try { window.dispatchEvent(new CustomEvent('fb:' + name, { detail: detail || {} })); } catch (e) { /* ignore */ }
   }
+  /* Global arcade settings win; legacy per-game key is a fallback so existing
+     players keep their choices. */
   function getSettings() {
     const s = loadJSON('frost-breakout:settings', {});
+    const g = loadJSON('frost-arcade:settings', {});
+    const m = Object.assign({}, s, g);
     return {
-      difficulty: s.difficulty || 'normal',
-      volume: (typeof s.volume === 'number' ? s.volume : Sound.getVolume()),
-      shake: (s.shake !== false),
-      particles: (s.particles !== false),
-      flash: (s.flash !== false),
+      difficulty: m.difficulty || 'normal',
+      volume: (typeof m.volume === 'number' ? m.volume : Sound.getVolume()),
+      shake: (m.shake !== false),
+      particles: (m.particles !== false),
+      flash: (m.flash !== false),
     };
   }
   function difficultyMult() {

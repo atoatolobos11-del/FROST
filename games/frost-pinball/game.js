@@ -19,6 +19,10 @@
   let state = 'menu', shake = 0, plunger = { pulled: 0, charging: false };
   let bonuses = { leftLane: false, rightLane: false, centerTarget: 0, spinner: 0 };
 
+  /* global arcade settings */
+  function diffMult() { try { return (shared && shared.difficultyMult) ? shared.difficultyMult() : 1; } catch (e) { return 1; } }
+  function kick(v) { if (shared && shared.fxOn && !shared.fxOn('shake')) return; shake = Math.max(shake, v); }
+
   let bumperTimers = [];
 
 export function init(c, sh) { canvas = c; shared = sh; ctx = canvas.getContext('2d');
@@ -159,7 +163,7 @@ export function destroy() {
   function launchBall(power = 1) {
     if (ballsInPlay >= maxBalls) return;
     power = Math.max(0.35, Math.min(1, power || 0.35));
-    const b = { x: W - 80, y: H - 80, vx: 0, vy: -800 * power, r: 10, trail: [], multiball: false };
+    const b = { x: W - 80, y: H - 80, vx: 0, vy: -800 * power * diffMult(), r: 10, trail: [], multiball: false };
     balls.push(b); ballsInPlay++; state = 'playing';
     shared.tone({ f0: 220, f1: 150, dur: 0.15, vol: 0.3, type: 'square' });
   }
@@ -206,8 +210,8 @@ export function destroy() {
           if (dot < 0) { ball.vx -= 2 * dot * nx; ball.vy -= 2 * dot * ny; }
           const speed = Math.hypot(ball.vx, ball.vy);
           if (speed > 1) {
-            ball.vx = (ball.vx / speed) * Math.min(speed * 1.1, 900);
-            ball.vy = (ball.vy / speed) * Math.min(speed * 1.1, 900);
+            ball.vx = (ball.vx / speed) * Math.min(speed * 1.1, 900 * diffMult());
+            ball.vy = (ball.vy / speed) * Math.min(speed * 1.1, 900 * diffMult());
           } else {
             ball.vx = nx * 200; ball.vy = ny * 200 - 100;
           }
@@ -215,7 +219,7 @@ export function destroy() {
           bumperTimers.push(setTimeout(() => { b.active = true; }, 300));
           shared.tone({ f0: 660 + b.hits * 50, f1: 440, dur: 0.08, vol: 0.2, type: 'sine' });
           shared.spawnParticles({ x: b.x, y: b.y, count: 12, color: b.color, speed: 150, life: 0.4, size: 4 });
-          shake = 3;
+          kick(3);
         }
       });
 

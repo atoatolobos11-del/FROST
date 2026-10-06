@@ -38,6 +38,9 @@
       <button type="button" class="icon-btn" id="btnBack" title="Back to games" aria-label="Back to game selector" hidden>
         <span class="ico-back">🏠</span>
       </button>
+      <button type="button" class="icon-btn" id="btnSettings" title="Settings" aria-label="Open settings">
+        <span class="ico-settings">⚙</span>
+      </button>
       <button type="button" class="icon-btn" id="btnFullscreen" title="Fullscreen (F)" aria-label="Toggle fullscreen" aria-pressed="false">
         <span class="ico-fullscreen">↗</span>
       </button>
@@ -66,6 +69,23 @@
 
   <section id="game-host" class="game-host" hidden></section>
   <div class="touch-controls" id="touchControls" hidden></div>
+
+  <section id="settings-overlay" class="settings-overlay" hidden>
+    <div class="settings-panel" role="dialog" aria-label="Arcade settings">
+      <h2 class="settings-title">Settings ⚙</h2>
+      <p class="settings-note">One panel for every game. Difficulty applies on the next game.</p>
+      <label class="set-row"><span>Difficulty<small>Chill slower · Blizzard faster</small></span>
+        <select id="setDifficulty"><option value="chill">Chill</option><option value="normal">Normal</option><option value="blizzard">Blizzard</option></select>
+      </label>
+      <label class="set-row"><span>Volume<small>Master sound level</small></span>
+        <span class="vol-wrap"><input type="range" id="setVolume" min="0" max="1" step="0.05" value="0.8" /> <b id="setVolumeVal">80%</b></span>
+      </label>
+      <label class="set-row"><span>Screen shake</span><input type="checkbox" id="setShake" checked /></label>
+      <label class="set-row"><span>Particles</span><input type="checkbox" id="setParticles" checked /></label>
+      <label class="set-row"><span>Flashes</span><input type="checkbox" id="setFlash" checked /></label>
+      <div class="btn-row"><button type="button" class="done-btn" id="btnSettingsClose">Done</button></div>
+    </div>
+  </section>
 
 </main>
 

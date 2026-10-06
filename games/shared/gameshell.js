@@ -290,6 +290,51 @@ btnFullscreen.addEventListener('click', toggleFullscreen);
 btnSound.addEventListener('click', toggleMute);
 btnPause.addEventListener('click', togglePause);
 
+/* ─── Global settings panel (one store for every game) ─── */
+const btnSettings = document.getElementById('btnSettings');
+const settingsOverlay = document.getElementById('settings-overlay');
+function syncMuteIcon() {
+  const m = FrostShared.isMuted();
+  btnSound.querySelector('.ico-sound').textContent = m ? '🔇' : '🔊';
+  btnSound.setAttribute('aria-pressed', String(m));
+}
+function renderSettingsPanel() {
+  const s = FrostShared.getSettings();
+  const d = document.getElementById('setDifficulty'); if (d) d.value = s.difficulty;
+  const v = document.getElementById('setVolume'); if (v) v.value = s.volume;
+  const vv = document.getElementById('setVolumeVal'); if (vv) vv.textContent = Math.round(s.volume * 100) + '%';
+  const sh = document.getElementById('setShake'); if (sh) sh.checked = !!s.shake;
+  const pa = document.getElementById('setParticles'); if (pa) pa.checked = !!s.particles;
+  const fl = document.getElementById('setFlash'); if (fl) fl.checked = !!s.flash;
+}
+if (btnSettings) btnSettings.addEventListener('click', () => {
+  renderSettingsPanel();
+  if (settingsOverlay) settingsOverlay.hidden = false;
+});
+const btnSettingsClose = document.getElementById('btnSettingsClose');
+if (btnSettingsClose) btnSettingsClose.addEventListener('click', () => {
+  if (settingsOverlay) settingsOverlay.hidden = true;
+});
+if (settingsOverlay) settingsOverlay.addEventListener('click', (e) => {
+  if (e.target === settingsOverlay) settingsOverlay.hidden = true;
+});
+const setDifficulty = document.getElementById('setDifficulty');
+if (setDifficulty) setDifficulty.addEventListener('change', () => {
+  FrostShared.saveSettings({ difficulty: setDifficulty.value });
+});
+const setVolume = document.getElementById('setVolume');
+if (setVolume) setVolume.addEventListener('input', () => {
+  FrostShared.saveSettings({ volume: parseFloat(setVolume.value) });
+  const vv = document.getElementById('setVolumeVal');
+  if (vv) vv.textContent = Math.round(parseFloat(setVolume.value) * 100) + '%';
+});
+[['setShake', 'shake'], ['setParticles', 'particles'], ['setFlash', 'flash']].forEach(([id, key]) => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('change', () => {
+    FrostShared.saveSettings({ [key]: el.checked });
+  });
+});
+
 document.addEventListener('fullscreenchange', () => {
   fullscreen = !!document.fullscreenElement;
   btnFullscreen.querySelector('.ico-fullscreen').textContent = fullscreen ? '↙' : '↗';
@@ -313,6 +358,7 @@ function boot() {
   window.addEventListener('keydown', unlock, { once: true });
   const search = document.getElementById('arcadeSearch');
   if (search) search.addEventListener('input', () => { arcadeQuery = search.value || ''; renderSelector(); });
+  syncMuteIcon();
   document.querySelectorAll('.arcade-filters .chip-btn').forEach((b) => {
     b.addEventListener('click', () => {
       arcadeFilter = b.dataset.filter || 'all';

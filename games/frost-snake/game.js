@@ -34,6 +34,10 @@
   let trail = []; // visual trail particles
   let touchStart = null; // swipe start for touch steering
 
+  /* global arcade settings */
+  function diffMult() { try { return (shared && shared.difficultyMult) ? shared.difficultyMult() : 1; } catch (e) { return 1; } }
+  function kick(v) { if (shared && shared.fxOn && !shared.fxOn('shake')) return; shake = Math.max(shake, v); }
+
 export function init(c, sh) {
     if (running) { try { destroy(); } catch (e) { /* ignore */ } }
     canvas = c; shared = sh; ctx = canvas.getContext('2d');
@@ -140,7 +144,7 @@ export function onTouchControl(name, on) {
     const cx = Math.floor(COLS / 2), cy = Math.floor(ROWS / 2);
     snake = [{ x: cx, y: cy }, { x: cx - 1, y: cy }, { x: cx - 2, y: cy }];
     dir = { x: 1, y: 0 }; nextDir = { x: 1, y: 0 };
-    score = 0; speed = INITIAL_SPEED; combo = 0; shake = 0; shieldT = 0;
+    score = 0; speed = Math.round(INITIAL_SPEED * diffMult() * 10) / 10; combo = 0; shake = 0; shieldT = 0;
     state = 'menu'; trail = [];
     powerUps = []; obstacles = [];
     spawnFood();
@@ -302,7 +306,7 @@ export function onTouchControl(name, on) {
 
   function gameOver() {
     state = 'gameover';
-    shake = 15;
+    kick(15);
     shared.tone({ f0: 150, f1: 60, dur: 0.5, vol: 0.4, type: 'sawtooth' });
     shared.spawnParticles({
       x: snake[0].x * GRID + GRID / 2, y: snake[0].y * GRID + GRID / 2,

@@ -6,21 +6,25 @@
   const saveJSON = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ } };
   const FB = () => window.frostBreakout;
 
-  /* ---------- settings ---------- */
+  /* ---------- settings (global arcade store; legacy key mirrored) ---------- */
   const SET_KEY = 'frost-breakout:settings';
+  const GLOBAL_SET_KEY = 'frost-arcade:settings';
   function getSettings() {
     const s = loadJSON(SET_KEY, {});
+    const g = loadJSON(GLOBAL_SET_KEY, {});
+    const m = Object.assign({}, s, g);
     return {
-      difficulty: s.difficulty || 'normal',
-      volume: (typeof s.volume === 'number' ? s.volume : 0.8),
-      shake: (s.shake !== false),
-      particles: (s.particles !== false),
-      flash: (s.flash !== false),
+      difficulty: m.difficulty || 'normal',
+      volume: (typeof m.volume === 'number' ? m.volume : 0.8),
+      shake: (m.shake !== false),
+      particles: (m.particles !== false),
+      flash: (m.flash !== false),
     };
   }
   function setSettings(patch) {
     const s = Object.assign(getSettings(), patch);
     saveJSON(SET_KEY, s);
+    saveJSON(GLOBAL_SET_KEY, s);
     applySettings(s);
     return s;
   }
