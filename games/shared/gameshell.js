@@ -134,4 +134,5 @@ if (document.readyState === 'loading') {
   boot();
 }
 
+window.FrostShell = { GAMES, loadGame };
 export { GAMES, loadGame };
