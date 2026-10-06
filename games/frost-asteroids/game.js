@@ -23,14 +23,62 @@
   const keys = {};
 
 export function init(c, sh) { canvas = c; shared = sh; ctx = canvas.getContext('2d');
+    if (running) { try { destroy(); } catch (e) { /* ignore */ } }
     resize(); window.addEventListener('resize', resize);
-    window.addEventListener('keydown', e => { keys[e.code] = true; });
-    window.addEventListener('keyup', e => { keys[e.code] = false; });
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    canvas.addEventListener('pointerdown', onTouchDown);
+    canvas.addEventListener('pointermove', onTouchMove);
+    canvas.addEventListener('pointerup', onTouchUp);
+    canvas.addEventListener('pointercancel', onTouchUp);
     highScore = shared.getBestScore('asteroids') || 0;
-    reset(); running = true; animationId = requestAnimationFrame(loop); shared.unlockAudio(); }
+    reset(); running = true; lastTs = 0; animationId = requestAnimationFrame(loop); shared.unlockAudio(); }
 
 export function destroy() { running = false; if (animationId) cancelAnimationFrame(animationId);
-    window.removeEventListener('resize', resize); shared.clearParticles(); }
+    window.removeEventListener('resize', resize);
+    window.removeEventListener('keydown', onKeyDown);
+    window.removeEventListener('keyup', onKeyUp);
+    window.removeEventListener('blur', onBlur);
+    if (canvas) {
+      canvas.removeEventListener('pointerdown', onTouchDown);
+      canvas.removeEventListener('pointermove', onTouchMove);
+      canvas.removeEventListener('pointerup', onTouchUp);
+      canvas.removeEventListener('pointercancel', onTouchUp);
+    }
+    Object.keys(keys).forEach(k => { keys[k] = false; });
+    touchTarget = null;
+    shared.clearParticles(); }
+
+  function onKeyDown(e) {
+    keys[e.code] = true;
+    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'ArrowDown' || e.code === 'ArrowLeft' || e.code === 'ArrowRight') e.preventDefault();
+    if (e.code === 'Space') {
+      if (state === 'menu') state = 'playing';
+      else if (state === 'gameover') { reset(); state = 'playing'; }
+    }
+    if (e.code === 'KeyP') {
+      if (state === 'playing') state = 'paused';
+      else if (state === 'paused') state = 'playing';
+    }
+  }
+  function onKeyUp(e) { keys[e.code] = false; }
+  function onBlur() { Object.keys(keys).forEach(k => { keys[k] = false; }); touchTarget = null; }
+
+  /* touch: ship steers toward the touch point and auto-fires while touching */
+  let touchTarget = null;
+  function canvasPos(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H };
+  }
+  function onTouchDown(e) {
+    touchTarget = canvasPos(e);
+    if (state === 'menu') state = 'playing';
+    else if (state === 'gameover') { reset(); state = 'playing'; }
+    e.preventDefault();
+  }
+  function onTouchMove(e) { if (touchTarget) touchTarget = canvasPos(e); }
+  function onTouchUp() { touchTarget = null; }
 
   function resize() { const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
@@ -43,7 +91,12 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
     spawnWave();
   }
 
-  function loop() { if (!running) return; update(1/60); render(); animationId = requestAnimationFrame(loop); }
+  let lastTs = 0;
+  function loop(ts) { if (!running) return;
+    if (!ts) ts = performance.now();
+    const dt = lastTs ? Math.min((ts - lastTs) / 1000, 1 / 20) : 1 / 60;
+    lastTs = ts;
+    update(dt); render(); animationId = requestAnimationFrame(loop); }
 
   function update(dt) {
     if (state !== 'playing') return;
@@ -54,6 +107,18 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
     if (keys.ArrowUp || keys.KeyW) {
       const a = ship.angle; ship.vx += Math.cos(a) * 280 * dt; ship.vy += Math.sin(a) * 280 * dt;
       shared.spawnParticles({ x: ship.x - Math.cos(a)*16, y: ship.y - Math.sin(a)*16, count: 2, color: C.ice2, speed: 30, life: 0.15, size: 2 });
+    }
+    if (touchTarget) {
+      const want = Math.atan2(touchTarget.y - ship.y, touchTarget.x - ship.x);
+      let diff = want - ship.angle;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      ship.angle += Math.max(-3.5 * dt, Math.min(3.5 * dt, diff));
+      if (Math.abs(diff) < 0.6) {
+        ship.vx += Math.cos(ship.angle) * 280 * dt;
+        ship.vy += Math.sin(ship.angle) * 280 * dt;
+      }
+      shoot();
     }
     if (keys.Space) shoot();
 
@@ -69,6 +134,10 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
     // Bullets
     bullets.forEach(b => { b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; wrap(b); });
     bullets = bullets.filter(b => b.life > 0);
+
+    // Enemy / boss bullets
+    bossBullets.forEach(b => { b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; wrap(b); });
+    bossBullets = bossBullets.filter(b => b.life > 0);
 
     // Enemies
     enemies.forEach(e => {

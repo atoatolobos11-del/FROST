@@ -19,14 +19,78 @@
   let state = 'menu', shake = 0, plunger = { pulled: 0, charging: false };
   let bonuses = { leftLane: false, rightLane: false, centerTarget: 0, spinner: 0 };
 
-export function init(c, sh) { canvas = c; shared = sh; ctx = canvas.getContext('2d');
-    resize(); window.addEventListener('resize', resize);
-    window.addEventListener('keydown', e => { if (e.key === 'ArrowLeft' || e.key === 'a') flippers.left.up = true; if (e.key === 'ArrowRight' || e.key === 'd') flippers.right.up = true; if (e.key === ' ' || e.key === 'Enter') { if (state === 'menu') launchBall(); else if (state === 'gameover') reset(); else plunger.charging = true; } if (e.key === 'p') { if (state === 'playing') state = 'paused'; else if (state === 'paused') state = 'playing'; } });
-    window.addEventListener('keyup', e => { if (e.key === 'ArrowLeft' || e.key === 'a') flippers.left.up = false; if (e.key === 'ArrowRight' || e.key === 'd') flippers.right.up = false; if (e.key === ' ' || e.key === 'Enter') { if (plunger.charging) { launchBall(plunger.pulled); plunger.charging = false; plunger.pulled = 0; } } });
-    highScore = shared.getBestScore('pinball') || 0;
-    buildTable(); reset(); running = true; animationId = requestAnimationFrame(loop); shared.unlockAudio(); }
+  let bumperTimers = [];
 
-export function destroy() { running = false; if (animationId) cancelAnimationFrame(animationId); window.removeEventListener('resize', resize); shared.clearParticles(); }
+export function init(c, sh) { canvas = c; shared = sh; ctx = canvas.getContext('2d');
+    if (running) { try { destroy(); } catch (e) { /* ignore */ } }
+    resize(); window.addEventListener('resize', resize);
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    canvas.addEventListener('pointerdown', onTouchDown);
+    canvas.addEventListener('pointerup', onTouchUp);
+    canvas.addEventListener('pointercancel', onTouchUp);
+    highScore = shared.getBestScore('pinball') || 0;
+    buildTable(); reset(); running = true; lastTs = 0; animationId = requestAnimationFrame(loop); shared.unlockAudio(); }
+
+export function destroy() {
+    running = false; if (animationId) cancelAnimationFrame(animationId);
+    window.removeEventListener('resize', resize);
+    window.removeEventListener('keydown', onKeyDown);
+    window.removeEventListener('keyup', onKeyUp);
+    window.removeEventListener('blur', onBlur);
+    if (canvas) {
+      canvas.removeEventListener('pointerdown', onTouchDown);
+      canvas.removeEventListener('pointerup', onTouchUp);
+      canvas.removeEventListener('pointercancel', onTouchUp);
+    }
+    flippers.left.up = false; flippers.right.up = false;
+    bumperTimers.forEach(t => clearTimeout(t)); bumperTimers = [];
+    shared.clearParticles(); }
+
+  function onKeyDown(e) {
+    const c = e.code;
+    if (c === 'ArrowLeft' || c === 'KeyA') flippers.left.up = true;
+    if (c === 'ArrowRight' || c === 'KeyD') flippers.right.up = true;
+    if (c === 'Space' || c === 'Enter') {
+      e.preventDefault();
+      if (state === 'menu') launchBall();
+      else if (state === 'gameover') reset();
+      else plunger.charging = true;
+    }
+    if (c === 'KeyP') {
+      if (state === 'playing') state = 'paused';
+      else if (state === 'paused') state = 'playing';
+    }
+    if (c === 'ArrowUp' || c === 'ArrowDown') e.preventDefault();
+  }
+  function onKeyUp(e) {
+    const c = e.code;
+    if (c === 'ArrowLeft' || c === 'KeyA') flippers.left.up = false;
+    if (c === 'ArrowRight' || c === 'KeyD') flippers.right.up = false;
+    if (c === 'Space' || c === 'Enter') {
+      if (plunger.charging) { launchBall(plunger.pulled); plunger.charging = false; plunger.pulled = 0; }
+    }
+  }
+  function onBlur() { flippers.left.up = false; flippers.right.up = false; plunger.charging = false; plunger.pulled = 0; }
+
+  /* touch: left half = left flipper, right half = right flipper.
+     Tap the plunger lane (far right) with no ball in play to launch. */
+  function canvasPos(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H };
+  }
+  function onTouchDown(e) {
+    const p = canvasPos(e);
+    if (state === 'menu') { launchBall(0.8); return; }
+    if (state === 'gameover') { reset(); return; }
+    if (p.x > W - 140 && ballsInPlay === 0) { launchBall(0.8); return; }
+    if (p.x < W / 2) flippers.left.up = true; else flippers.right.up = true;
+    e.preventDefault();
+  }
+  function onTouchUp(e) {
+    flippers.left.up = false; flippers.right.up = false;
+  }
 
   function resize() { const dpr = Math.min(window.devicePixelRatio || 1, 2.5); canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
 
@@ -51,8 +115,8 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
     ];
     // Ramps
     ramps = [
-      { x: 500, y: 300, w: 80, h: 120, angle: -0.3, target: 'top' },
-      { x: 140, y: 300, w: 80, h: 120, angle: 0.3, target: 'top' },
+      { x: 500, y: 300, w: 80, h: 120, angle: -0.3, target: 'top', cd: 0 },
+      { x: 140, y: 300, w: 80, h: 120, angle: 0.3, target: 'top', cd: 0 },
     ];
     // Drop targets
     targets = [
@@ -81,12 +145,18 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
 
   function launchBall(power = 1) {
     if (ballsInPlay >= maxBalls) return;
+    power = Math.max(0.35, Math.min(1, power || 0.35));
     const b = { x: W - 80, y: H - 80, vx: 0, vy: -800 * power, r: 10, trail: [], multiball: false };
     balls.push(b); ballsInPlay++; state = 'playing';
     shared.tone({ f0: 220, f1: 150, dur: 0.15, vol: 0.3, type: 'square' });
   }
 
-  function loop() { if (!running) return; update(1/60); render(); animationId = requestAnimationFrame(loop); }
+  let lastTs = 0;
+  function loop(ts) { if (!running) return;
+    if (!ts) ts = performance.now();
+    const dt = lastTs ? Math.min((ts - lastTs) / 1000, 1 / 20) : 1 / 60;
+    lastTs = ts;
+    update(dt); render(); animationId = requestAnimationFrame(loop); }
 
   function update(dt) {
     if (state !== 'playing') return;
@@ -122,9 +192,14 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
           const dot = ball.vx * nx + ball.vy * ny;
           if (dot < 0) { ball.vx -= 2 * dot * nx; ball.vy -= 2 * dot * ny; }
           const speed = Math.hypot(ball.vx, ball.vy);
-          ball.vx = (ball.vx / speed) * Math.min(speed * 1.1, 900);
-          ball.vy = (ball.vy / speed) * Math.min(speed * 1.1, 900);
-          b.hits++; score += 100; b.active = false; setTimeout(() => b.active = true, 300);
+          if (speed > 1) {
+            ball.vx = (ball.vx / speed) * Math.min(speed * 1.1, 900);
+            ball.vy = (ball.vy / speed) * Math.min(speed * 1.1, 900);
+          } else {
+            ball.vx = nx * 200; ball.vy = ny * 200 - 100;
+          }
+          b.hits++; score += 100; b.active = false;
+          bumperTimers.push(setTimeout(() => { b.active = true; }, 300));
           shared.tone({ f0: 660 + b.hits * 50, f1: 440, dur: 0.08, vol: 0.2, type: 'sine' });
           shared.spawnParticles({ x: b.x, y: b.y, count: 12, color: b.color, speed: 150, life: 0.4, size: 4 });
           shake = 3;
@@ -153,12 +228,15 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
       checkFlipper(ball, flippers.left, true);
       checkFlipper(ball, flippers.right, false);
 
-      // Ramp collisions
+      // Ramp collisions (per-ramp cooldown so one pass scores once)
       ramps.forEach(r => {
+        if (r.cd > 0) r.cd -= dt;
+        if (r.cd > 0) return;
         if (ball.x > r.x && ball.x < r.x + r.w && ball.y > r.y && ball.y < r.y + r.h) {
           if (ball.vy < -200) { // Going up ramp
+            r.cd = 1.2;
             score += 5000; bonuses.spinner++;
-            shared.tone({ f0: 440, f1: 660, f2: 880, dur: 0.5, vol: 0.3, type: 'sine' });
+            shared.tone({ f0: 440, f1: 660, dur: 0.5, vol: 0.3, type: 'sine' });
             shared.spawnParticles({ x: ball.x, y: ball.y, count: 25, color: C.gold, speed: 250, life: 1, size: 5 });
             ball.vy = -300; // Pop out
           }
@@ -206,10 +284,14 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
     const len = Math.hypot(dx, dy);
     const nx = -dy / len, ny = dx / len; // Normal
     const px = ball.x - pivotX, py = ball.y - pivotY;
-    const proj = px * dx / len + py * dy / len; // Along flipper
+    const proj = Math.max(0, Math.min(len, px * dx / len + py * dy / len)); // Along flipper, clamped
     const dist = px * nx + py * ny; // Perpendicular
 
-    if (proj >= 0 && proj <= len && Math.abs(dist) < ball.r + 8) {
+    if (Math.abs(dist) < ball.r + 8) {
+      // Push out of penetration first so the ball can't tunnel or jitter
+      const push = (ball.r + 8) - Math.abs(dist);
+      ball.x += (dist >= 0 ? nx : -nx) * push;
+      ball.y += (dist >= 0 ? ny : -ny) * push;
       // Hit flipper
       const flipperVel = (flipper.up ? 1 : 0) * 800; // Simplified
       const vAlong = (ball.vx * dx + ball.vy * dy) / len;

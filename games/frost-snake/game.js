@@ -30,16 +30,24 @@
   let state = 'menu'; // menu, playing, paused, gameover
   let shake = 0;
   let combo = 0, lastFoodTime = 0;
+  let shieldT = 0; // shield power-up invincibility timer
   let trail = []; // visual trail particles
+  let touchStart = null; // swipe start for touch steering
 
 export function init(c, sh) {
+    if (running) { try { destroy(); } catch (e) { /* ignore */ } }
     canvas = c; shared = sh; ctx = canvas.getContext('2d');
     resize();
     window.addEventListener('resize', resize);
     window.addEventListener('keydown', onKeyDown);
+    canvas.addEventListener('pointerdown', onTouchStart);
+    canvas.addEventListener('pointermove', onTouchMove);
+    canvas.addEventListener('pointerup', onTouchEnd);
+    canvas.addEventListener('pointercancel', onTouchEnd);
     highScore = shared.getBestScore('snake') || 0;
     reset();
     running = true;
+    lastTs = 0;
     animationId = requestAnimationFrame(loop);
     shared.unlockAudio();
   }
@@ -49,6 +57,12 @@ export function destroy() {
     if (animationId) cancelAnimationFrame(animationId);
     window.removeEventListener('resize', resize);
     window.removeEventListener('keydown', onKeyDown);
+    if (canvas) {
+      canvas.removeEventListener('pointerdown', onTouchStart);
+      canvas.removeEventListener('pointermove', onTouchMove);
+      canvas.removeEventListener('pointerup', onTouchEnd);
+      canvas.removeEventListener('pointercancel', onTouchEnd);
+    }
     shared.clearParticles();
   }
 
@@ -60,41 +74,80 @@ export function destroy() {
   }
 
   function onKeyDown(e) {
-    const k = e.key;
-    if (k === 'ArrowUp' && dir.y !== 1) nextDir = { x: 0, y: -1 };
-    else if (k === 'ArrowDown' && dir.y !== -1) nextDir = { x: 0, y: 1 };
-    else if (k === 'ArrowLeft' && dir.x !== 1) nextDir = { x: -1, y: 0 };
-    else if (k === 'ArrowRight' && dir.x !== -1) nextDir = { x: 1, y: 0 };
-    else if (k === ' ') {
-      if (state === 'menu' || state === 'gameover') reset();
+    const k = e.code || e.key;
+    if (k === 'ArrowUp' && dir.y !== 1) { nextDir = { x: 0, y: -1 }; e.preventDefault(); }
+    else if (k === 'ArrowDown' && dir.y !== -1) { nextDir = { x: 0, y: 1 }; e.preventDefault(); }
+    else if (k === 'ArrowLeft' && dir.x !== 1) { nextDir = { x: -1, y: 0 }; e.preventDefault(); }
+    else if (k === 'ArrowRight' && dir.x !== -1) { nextDir = { x: 1, y: 0 }; e.preventDefault(); }
+    else if (k === 'Space') {
+      e.preventDefault();
+      if (state === 'menu') state = 'playing';
+      else if (state === 'gameover') { reset(); state = 'playing'; }
       else if (state === 'playing') state = 'paused';
       else state = 'playing';
     }
-    else if (k === 'p' || k === 'P') {
+    else if (k === 'KeyP') {
       if (state === 'playing') state = 'paused';
       else if (state === 'paused') state = 'playing';
     }
+  }
+
+  /* touch: swipe steers, tap starts/pauses */
+  function canvasPos(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H };
+  }
+  function onTouchStart(e) { touchStart = canvasPos(e); }
+  function onTouchMove(e) {
+    if (!touchStart) return;
+    const p = canvasPos(e);
+    const dx = p.x - touchStart.x, dy = p.y - touchStart.y;
+    if (Math.hypot(dx, dy) < 24) return;
+    if (Math.abs(dx) > Math.abs(dy)) nextDir = dx > 0 ? { x: 1, y: 0 } : { x: -1, y: 0 };
+    else nextDir = dy > 0 ? { x: 0, y: 1 } : { x: 0, y: -1 };
+    touchStart = p;
+  }
+  function onTouchEnd(e) {
+    if (touchStart) {
+      const p = canvasPos(e);
+      if (Math.hypot(p.x - touchStart.x, p.y - touchStart.y) < 24) {
+        if (state === 'menu') state = 'playing';
+        else if (state === 'gameover') { reset(); state = 'playing'; }
+        else if (state === 'playing') state = 'paused';
+        else if (state === 'paused') state = 'playing';
+      }
+    }
+    touchStart = null;
   }
 
   function reset() {
     const cx = Math.floor(COLS / 2), cy = Math.floor(ROWS / 2);
     snake = [{ x: cx, y: cy }, { x: cx - 1, y: cy }, { x: cx - 2, y: cy }];
     dir = { x: 1, y: 0 }; nextDir = { x: 1, y: 0 };
-    score = 0; speed = INITIAL_SPEED; combo = 0; shake = 0;
+    score = 0; speed = INITIAL_SPEED; combo = 0; shake = 0; shieldT = 0;
     state = 'menu'; trail = [];
-    spawnFood();
     powerUps = []; obstacles = [];
+    spawnFood();
     if (Math.random() < 0.7) spawnObstacles();
   }
 
-  function spawnFood() {
-    let ok = false;
-    while (!ok) {
-      food = { x: randInt(0, COLS - 1), y: randInt(0, ROWS - 1), type: 'normal' };
-      ok = !snake.some(s => s.x === food.x && s.y === food.y) &&
-           !powerUps.some(p => p.x === food.x && p.y === food.y) &&
-           !obstacles.some(o => o.x === food.x && o.y === food.y);
+  /* random free cell, or null when the board is (nearly) full */
+  function freeCell() {
+    for (let tries = 0; tries < 400; tries++) {
+      const c = { x: randInt(0, COLS - 1), y: randInt(0, ROWS - 1) };
+      if (snake.some(s => s.x === c.x && s.y === c.y)) continue;
+      if (food && food.x === c.x && food.y === c.y) continue;
+      if (powerUps.some(p => p.x === c.x && p.y === c.y)) continue;
+      if (obstacles.some(o => o.x === c.x && o.y === c.y)) continue;
+      return c;
     }
+    return null;
+  }
+
+  function spawnFood() {
+    const c = freeCell();
+    if (!c) { score += 500; if (score > highScore) { highScore = score; shared.saveScore('snake', highScore); } gameOver(); return; }
+    food = { x: c.x, y: c.y, type: 'normal' };
     // Rare special food
     if (Math.random() < 0.1) food.type = 'gold';
     else if (Math.random() < 0.15) food.type = 'speed';
@@ -102,63 +155,54 @@ export function destroy() {
 
   function spawnPowerUp() {
     if (powerUps.length >= 3) return;
-    let ok = false, pup;
-    while (!ok) {
-      pup = {
-        x: randInt(0, COLS - 1), y: randInt(0, ROWS - 1),
-        type: pick(['slow', 'shrink', 'score', 'shield']),
-        life: 8 + Math.random() * 7
-      };
-      ok = !snake.some(s => s.x === pup.x && s.y === pup.y) &&
-           (food ? !(pup.x === food.x && pup.y === food.y) : true) &&
-           !powerUps.some(p => p.x === pup.x && p.y === pup.y) &&
-           !obstacles.some(o => o.x === pup.x && o.y === pup.y);
-    }
-    powerUps.push(pup);
+    const c = freeCell();
+    if (!c) return;
+    powerUps.push({ x: c.x, y: c.y, type: pick(['slow', 'shrink', 'score', 'shield']), life: 8 + Math.random() * 7 });
   }
 
   function spawnObstacles() {
     const count = 3 + Math.floor(score / 50);
     for (let i = 0; i < count; i++) {
-      let ok = false, obs;
-      while (!ok) {
-        obs = { x: randInt(0, COLS - 1), y: randInt(0, ROWS - 1) };
-        ok = !snake.some(s => s.x === obs.x && s.y === obs.y) &&
-             (food ? !(obs.x === food.x && obs.y === food.y) : true) &&
-             !powerUps.some(p => p.x === obs.x && p.y === obs.y) &&
-             !obstacles.some(o => o.x === obs.x && o.y === obs.y);
-      }
-      obstacles.push(obs);
+      const c = freeCell();
+      if (!c) return;
+      obstacles.push(c);
     }
   }
 
-  function loop() {
+  let lastTs = 0;
+  function loop(ts) {
     if (!running) return;
-    update();
+    if (!ts) ts = performance.now();
+    const dt = lastTs ? Math.min((ts - lastTs) / 1000, 1 / 20) : 1 / 60;
+    lastTs = ts;
+    update(dt);
     render();
     animationId = requestAnimationFrame(loop);
   }
 
   let acc = 0;
-  function update() {
+  function update(dt) {
     if (state !== 'playing') return;
-    acc += 1 / 60;
+    if (shieldT > 0) shieldT = Math.max(0, shieldT - dt);
+    acc += dt;
     if (acc < 1 / speed) return;
     acc = 0;
 
     dir = nextDir;
     const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+    const willGrow = food && head.x === food.x && head.y === food.y;
 
     // Wall collision
     if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) {
       gameOver(); return;
     }
-    // Self collision
-    if (snake.some(s => s.x === head.x && s.y === head.y)) {
+    // Self collision — the tail tip vacates this tick unless growing
+    const body = willGrow ? snake : snake.slice(0, snake.length - 1);
+    if (shieldT <= 0 && body.some(s => s.x === head.x && s.y === head.y)) {
       gameOver(); return;
     }
     // Obstacle collision
-    if (obstacles.some(o => o.x === head.x && o.y === head.y)) {
+    if (shieldT <= 0 && obstacles.some(o => o.x === head.x && o.y === head.y)) {
       gameOver(); return;
     }
 
@@ -169,8 +213,9 @@ export function destroy() {
     let atePowerUp = null;
 
     // Food collision
-    if (head.x === food.x && head.y === food.y) {
+    if (food && head.x === food.x && head.y === food.y) {
       ateFood = true;
+      const ex = food.x, ey = food.y, etype = food.type;
       const now = Date.now();
       if (now - lastFoodTime < 2000) combo++; else combo = 1;
       lastFoodTime = now;
@@ -189,8 +234,8 @@ export function destroy() {
       if (Math.random() < 0.1 && obstacles.length < 15) spawnObstacles();
 
       shared.spawnParticles({
-        x: food.x * GRID + GRID / 2, y: food.y * GRID + GRID / 2,
-        count: 18, color: food.type === 'gold' ? C.gold : C.ice,
+        x: ex * GRID + GRID / 2, y: ey * GRID + GRID / 2,
+        count: 18, color: etype === 'gold' ? C.gold : C.ice,
         speed: 180, life: 0.6, size: 4, gravity: 60
       });
     } else {
@@ -211,16 +256,16 @@ export function destroy() {
 
     // Power-up lifetime
     for (let i = powerUps.length - 1; i >= 0; i--) {
-      powerUps[i].life -= 1 / 60;
+      powerUps[i].life -= dt;
       if (powerUps[i].life <= 0) powerUps.splice(i, 1);
     }
 
-    shake = Math.max(0, shake - 1 / 60 * 8);
-    shared.updateParticles(1 / 60);
+    shake = Math.max(0, shake - dt * 8);
+    shared.updateParticles(dt);
 
     // Update trail
     for (let i = trail.length - 1; i >= 0; i--) {
-      trail[i].life -= 1 / 60;
+      trail[i].life -= dt;
       if (trail[i].life <= 0) trail.splice(i, 1);
     }
   }
@@ -235,7 +280,7 @@ export function destroy() {
       case 'slow': speed = Math.max(INITIAL_SPEED, speed - 3); break;
       case 'shrink': if (snake.length > 3) snake.length = Math.max(3, snake.length - 2); break;
       case 'score': score += 100; if (score > highScore) { highScore = score; shared.saveScore('snake', highScore); } break;
-      case 'shield': /* temporary invincibility - not fully implemented */ break;
+      case 'shield': shieldT = 8; break;
     }
   }
 
@@ -349,7 +394,8 @@ export function destroy() {
     ctx.fillText('Score: ' + score, 20, 20);
     ctx.fillStyle = C.gold; ctx.fillText('Best: ' + highScore, 20, 48);
     ctx.fillStyle = C.ice3; ctx.fillText('Speed: ' + speed.toFixed(1), 20, 76);
-    if (combo > 1) { ctx.fillStyle = C.gold; ctx.fillText('Combo x' + combo.toFixed(1), 20, 104); }
+    if (combo > 1) { ctx.fillStyle = C.gold; ctx.fillText('Combo x' + combo, 20, 104); }
+    if (shieldT > 0) { ctx.fillStyle = C.violet; ctx.fillText('SHIELD ' + Math.ceil(shieldT) + 's', 20, 128); }
 
     // Length indicator
     ctx.fillStyle = C.ice2; ctx.textAlign = 'right';

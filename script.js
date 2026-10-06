@@ -448,7 +448,7 @@
     }
 
     const half = this.w / 2;
-    this.x = clamp(this.x, PLAY.x + half - 8, PLAY.right - half + 8);
+    this.x = clamp(this.x, PLAY.x + half, PLAY.right - half);
     this.glowPulse += dt;
   };
 
@@ -581,12 +581,19 @@
    * ======================================================================== */
 
   const BEST_KEY = 'frost-breakout:best';
+  const MUTED_KEY = 'frost-breakout:muted';
 
   function loadBest() {
     try { return parseInt(localStorage.getItem(BEST_KEY), 10) || 0; } catch (e) { return 0; }
   }
   function saveBest(v) {
     try { localStorage.setItem(BEST_KEY, String(v)); } catch (e) { /* private mode */ }
+  }
+  function loadMuted() {
+    try { return localStorage.getItem(MUTED_KEY) === '1'; } catch (e) { return false; }
+  }
+  function saveMuted(v) {
+    try { localStorage.setItem(MUTED_KEY, v ? '1' : '0'); } catch (e) { /* private mode */ }
   }
 
   const G = {
@@ -690,13 +697,25 @@
     if (cfg.pattern === 'fortress') {
       const colXs = [];
       for (let c = 0; c < cols; c++) colXs.push(PLAY.x + padX + c * (cw + gapX));
+      const bedrockCells = [];
       [1, cols - 2].forEach(function (ci) {
         for (let r = 1; r < rows; r += 2) {
-          bricks.push(new Brick(colXs[ci], top + r * (ch + gapY), cw, ch, BT.bedrock));
+          bedrockCells.push({ x: colXs[ci], y: top + r * (ch + gapY), w: cw, h: ch });
         }
       });
       const midC = Math.floor(cols / 2);
-      bricks.push(new Brick(colXs[midC], top + (rows - 1) * (ch + gapY), cw * 2 + gapX, ch, BT.bedrock));
+      bedrockCells.push({ x: colXs[midC], y: top + (rows - 1) * (ch + gapY), w: cw * 2 + gapX, h: ch });
+      /* replace (not stack onto) any destructible brick sharing the cell */
+      const filtered = bricks.filter(function (b) {
+        return !bedrockCells.some(function (bc) {
+          return Math.abs(b.x - bc.x) < 1 && Math.abs(b.y - bc.y) < 1;
+        });
+      });
+      bricks.length = 0;
+      filtered.forEach(function (b) { bricks.push(b); });
+      bedrockCells.forEach(function (bc) {
+        bricks.push(new Brick(bc.x, bc.y, bc.w, bc.h, BT.bedrock));
+      });
     }
     if (cfg.pattern === 'cathedral') {
       bricks.forEach(function (b) {
@@ -749,6 +768,7 @@
     G.bricksBroken = 0;
     G.combo = 0;
     G.bestCombo = 0;
+    G.dryCounter = 0;
     G.powerups.length = 0;
     G.particles.length = 0;
     G.rings.length = 0;
@@ -771,6 +791,7 @@
   }
 
   function showBanner(title, sub, hold) {
+    clearTimeout(ui.bannerTid);
     ui.bannerTitle.textContent = title;
     ui.bannerSub.textContent = sub || '';
     ui.banner.hidden = false;
@@ -849,7 +870,7 @@
 
       /* chance to drop a power-up */
       const cfg = LEVELS[G.level - 1];
-      if (Math.random() < cfg.drop) dropPowerUp(b.x + b.w / 2, b.y + b.h / 2);
+      if (Math.random() < cfg.drop) { G.dryCounter = 0; dropPowerUp(b.x + b.w / 2, b.y + b.h / 2); }
       else {
         G.dryCounter = (G.dryCounter || 0) + 1;
         if (G.dryCounter >= 11) { G.dryCounter = 0; dropPowerUp(b.x + b.w / 2, b.y + b.h / 2); }
@@ -894,7 +915,7 @@
   function checkLevelCleared() {
     const left = G.bricks.some(function (b) { return b.alive && !b.indestructible; });
     if (left) return;
-    G.state === 'play' && beginLevelClear();
+    if (G.state === 'play' || G.state === 'serve') beginLevelClear();
   }
 
   function beginLevelClear() {
@@ -981,8 +1002,10 @@
         ball.x += n.nx * 0.5;
         ball.y += n.ny * 0.5;
 
-        G.combo++;
-        if (G.combo > G.bestCombo) G.bestCombo = G.combo;
+        if (!b.indestructible) {
+          G.combo++;
+          if (G.combo > G.bestCombo) G.bestCombo = G.combo;
+        }
         ball.hitFlash = 1;
         hitBrick(b, ball, n);
         break;
@@ -1118,6 +1141,19 @@
       G.powerups.forEach(function (p) {
         if (!p.dead) p.update(dt, G.paddle);
       });
+      /* paddle catch — capsules are meant to be caught, not just touched by a ball */
+      (function () {
+        const p = G.paddle;
+        const x0 = p.x - p.w / 2 - 8, x1 = p.x + p.w / 2 + 8;
+        const y0 = p.y - p.h / 2 - 10, y1 = p.y + p.h / 2 + 6;
+        G.powerups.forEach(function (pu) {
+          if (pu.dead) return;
+          if (pu.x >= x0 && pu.x <= x1 && pu.y >= y0 && pu.y <= y1) {
+            pu.dead = true;
+            collectPowerUp(pu);
+          }
+        });
+      })();
       G.powerups = G.powerups.filter(function (p) {
         if (p.dead) return false;
         if (p.y - p.h / 2 > PLAY.bottom + 20) return false;
@@ -1443,7 +1479,7 @@
     brickGlowLayer.width = Math.round(W * DPR);
     brickGlowLayer.height = Math.max(1, Math.round(glowBand.h * DPR));
     const g = brickGlowLayer.getContext('2d');
-    g.setTransform(DPR, 0, 0, DPR, 0, glowBand.top * DPR);
+    g.setTransform(DPR, 0, 0, DPR, 0, -glowBand.top * DPR);
     g.globalCompositeOperation = 'lighter';
     G.bricks.forEach(function (b) {
       const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
@@ -2176,7 +2212,11 @@
       if (G.state !== 'menu') restart();
       else primaryAction();
     } else if (k === 'KeyM') {
+      Sound.unlock();
       toggleMute();
+    } else if (k === 'KeyF') {
+      Sound.unlock();
+      toggleFullscreen();
     }
   });
 
@@ -2186,13 +2226,13 @@
     else if (k === 'ArrowRight' || k === 'KeyD') { input.right = false; updateAxis(); }
   });
 
-  /* pointer / mouse on the arena */
+  /* pointer / mouse on the arena — hover must not hijack keyboard control */
   canvas.addEventListener('pointermove', function (e) {
+    if (e.pointerType === 'mouse' && !input.pointerDown) return;
     const p = toLogical(e.clientX, e.clientY);
     input.pointerX = p.x;
     input.pointerY = p.y;
     input.pointerActive = true;
-    input.pointerDown = true;
   });
 
   canvas.addEventListener('pointerdown', function (e) {
@@ -2210,6 +2250,10 @@
   });
 
   canvas.addEventListener('pointerup', function () { input.pointerDown = false; });
+  canvas.addEventListener('pointercancel', function () {
+    input.pointerDown = false;
+    input.pointerActive = false;
+  });
   canvas.addEventListener('pointerleave', function () {
     input.pointerActive = false;
     input.pointerDown = false;
@@ -2274,6 +2318,7 @@
   function toggleMute() {
     const next = !Sound.isMuted();
     Sound.setMuted(next);
+    saveMuted(next);
     ui.btnSound.classList.toggle('off', next);
     ui.btnSound.querySelector('.ico-sound').textContent = next ? '🔇' : '🔊';
     ui.btnSound.setAttribute('aria-pressed', String(next));
@@ -2282,10 +2327,13 @@
   function toggleFullscreen() {
     const shell = document.getElementById('shell');
     if (!document.fullscreenElement) {
-      shell.requestFullscreen().catch(function () {
-        /* user gesture required or denied */
-      });
-    } else {
+      const rq = shell && (shell.requestFullscreen || shell.webkitRequestFullscreen);
+      if (!rq) return;
+      try {
+        const ret = rq.call(shell);
+        if (ret && ret.catch) ret.catch(function () { /* denied */ });
+      } catch (e) { /* unsupported */ }
+    } else if (document.exitFullscreen) {
       document.exitFullscreen();
     }
   }
@@ -2299,7 +2347,10 @@
   });
 
   function isTouch() {
-    return window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+    if (isTouch.cached == null) {
+      isTouch.cached = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+    }
+    return isTouch.cached;
   }
 
   document.addEventListener('visibilitychange', function () {
@@ -2313,6 +2364,7 @@
   const ui = {
     score: document.getElementById('uiScore'),
     level: document.getElementById('uiLevel'),
+    levelNum: document.getElementById('uiLevelNum'),
     levelMax: document.getElementById('uiLevelMax'),
     lives: document.getElementById('uiLives'),
     comboChip: document.getElementById('uiComboChip'),
@@ -2337,7 +2389,8 @@
 
   function syncUI() {
     ui.score.textContent = G.score.toLocaleString('en-US');
-    ui.level.textContent = String(G.level);
+    if (ui.levelNum) ui.levelNum.textContent = String(G.level);
+    else ui.level.textContent = String(G.level);
     ui.levelMax.textContent = '/' + LEVELS.length;
 
     let hearts = '';
@@ -2378,15 +2431,22 @@
   }
 
   /* --- wire up DOM controls ------------------------------------------------ */
+  /* Space/Enter also clicks a focused button natively — drop button focus on
+     activation so game keys never double-fire a menu action. */
+  document.addEventListener('click', function (e) {
+    const btn = e.target && e.target.closest ? e.target.closest('button') : null;
+    if (btn && btn.blur) btn.blur();
+  });
+
   document.getElementById('btnStart').addEventListener('click', function () { Sound.unlock(); startGame(); });
   document.getElementById('btnResume').addEventListener('click', function () { togglePause(); });
   document.getElementById('btnRetry').addEventListener('click', function () { Sound.unlock(); startGame(); });
   document.getElementById('btnPlayAgain').addEventListener('click', function () { Sound.unlock(); startGame(); });
-  ui.btnPause.addEventListener('click', function () { togglePause(); });
+  ui.btnPause.addEventListener('click', function () { Sound.unlock(); togglePause(); });
   ui.btnRestart.addEventListener('click', function () { restart(); });
   ui.btnSound.addEventListener('click', function () { Sound.unlock(); toggleMute(); });
-  ui.btnFullscreen.addEventListener('click', function () { toggleFullscreen(); });
-  ui.btnArcade.addEventListener('click', function () { window.location.href = 'games/shell.html'; });
+  ui.btnFullscreen.addEventListener('click', function () { Sound.unlock(); toggleFullscreen(); });
+  if (ui.btnArcade) ui.btnArcade.addEventListener('click', function () { window.location.href = 'games/shell.html'; });
 
   ['btnMenu2', 'btnMenu3'].forEach(function (id) {
     document.getElementById(id).addEventListener('click', function () {
@@ -2400,18 +2460,15 @@
   });
 
   function quitGame() {
-    /* Stop the game loop cleanly */
+    /* back to the menu — scores/best are already persisted via addScore */
     G.balls = []; G.powerups = []; G.particles = []; G.rings = []; G.texts = [];
     G.shield = 0; G.paddle = new Paddle();
     setState('menu');
-
-    /* Try to close the tab — only works if we opened it */
-    try { window.close(); } catch (e) { /* no-op */ }
   }
 
   ['btnQuitGame', 'btnQuitGameOver', 'btnQuitGameWin'].forEach(function (id) {
     document.getElementById(id).addEventListener('click', function () {
-      if (confirm('Quit Frost Breakout? Your progress will be saved.')) quitGame();
+      quitGame();
     });
   });
 
@@ -2466,7 +2523,7 @@
         types: types,
       };
     },
-    samples: function () { return Object.keys(Sound.sampleNames()); },
+    samples: function () { return Sound.sampleNames(); },
     muted: function () { return Sound.isMuted(); },
     start: function () { startGame(); },
     restart: function () { restart(); },
@@ -2482,6 +2539,7 @@
       G.balls.forEach(function (b) { b.dead = true; });
     },
     give: function (key) {
+      if (G.state !== 'play' && G.state !== 'serve') return;
       const def = PU[key] || PU[pick(PU_ORDER)];
       collectPowerUp(new PowerUp(G.paddle.x, G.paddle.y - 90, def));
     },
@@ -2497,6 +2555,7 @@
   buildLevel(1);
   G.balls = [];
   syncUI();
+  if (loadMuted()) toggleMute();
   Sound.loadSamples();
   requestAnimationFrame(frame);
 })();

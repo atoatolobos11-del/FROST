@@ -24,6 +24,7 @@ let shared = null;
 let canvas = null;
 let ctx = null;
 let animationId = null;
+let lastTs = 0;
 let running = false;
 let left = { y: 0, score: 0, ai: false };
 let right = { y: 0, score: 0, ai: false };
@@ -31,7 +32,8 @@ let ball = { x: 0, y: 0, vx: 0, vy: 0, speed: BALL_BASE_SPEED };
 let state = 'menu';
 let winner = null;
 let shake = 0;
-const keys = { w: false, s: false, ArrowUp: false, ArrowDown: false };
+const keys = { KeyW: false, KeyS: false, ArrowUp: false, ArrowDown: false };
+let touchL = null, touchR = null; // touch-drag paddle targets (canvas Y)
 
 function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
 
@@ -55,9 +57,13 @@ function hitPaddle(side) {
   const paddleCenter = paddle.y + PADDLE_H / 2;
   const offset = (ball.y - paddleCenter) / (PADDLE_H / 2);
   const angle = offset * Math.PI / 3;
-  const dir = side === 'left' ? 1 : -1;
-  ball.vx = Math.cos(angle) * ball.speed * dir;
-  ball.vy = Math.sin(angle) * ball.speed;
+  const dirn = side === 'left' ? 1 : -1;
+  let vx = Math.cos(angle) * ball.speed * dirn;
+  let vy = Math.sin(angle) * ball.speed;
+  if (Math.abs(vy) < ball.speed * 0.25) vy = (vy >= 0 ? 1 : -1) * ball.speed * 0.25; // no flat rallies
+  const sp = Math.hypot(vx, vy) || ball.speed;
+  ball.vx = (vx / sp) * ball.speed;
+  ball.vy = (vy / sp) * ball.speed;
   ball.x = side === 'left' ? PADDLE_W + 20 + BALL_SIZE : W - PADDLE_W - 20 - BALL_SIZE;
   shared.tone({ f0: 220, f1: 180, dur: 0.08, vol: 0.25, type: 'square' });
   shared.spawnParticles({
@@ -89,9 +95,10 @@ function scorePoint(side) {
 
 function resetBall() {
   ball.x = W / 2; ball.y = H / 2;
-  const angle = (Math.random() - 0.5) * Math.PI / 2;
-  const dir = Math.random() < 0.5 ? 1 : -1;
-  ball.vx = Math.cos(angle) * BALL_BASE_SPEED * dir;
+  let angle = (Math.random() - 0.5) * Math.PI / 2;
+  if (Math.abs(angle) < 0.25) angle = angle >= 0 ? 0.25 : -0.25; // no flat serves
+  const dirn = Math.random() < 0.5 ? 1 : -1;
+  ball.vx = Math.cos(angle) * BALL_BASE_SPEED * dirn;
   ball.vy = Math.sin(angle) * BALL_BASE_SPEED;
   ball.speed = BALL_BASE_SPEED;
 }
@@ -132,13 +139,20 @@ function drawOverlay(title, subtitle) {
 }
 
 export function init(c, sh) {
+  if (running) { try { destroy(); } catch (e) { /* ignore */ } }
   canvas = c; shared = sh; ctx = canvas.getContext('2d');
   resize();
   window.addEventListener('resize', resize);
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
+  window.addEventListener('blur', onBlur);
+  canvas.addEventListener('pointerdown', onTouchDown);
+  canvas.addEventListener('pointermove', onTouchMove);
+  canvas.addEventListener('pointerup', onTouchUp);
+  canvas.addEventListener('pointercancel', onTouchUp);
   resetMatch();
   running = true;
+  lastTs = 0;
   animationId = requestAnimationFrame(gameLoop);
   shared.unlockAudio();
 }
@@ -149,6 +163,16 @@ export function destroy() {
   window.removeEventListener('resize', resize);
   window.removeEventListener('keydown', onKeyDown);
   window.removeEventListener('keyup', onKeyUp);
+  window.removeEventListener('blur', onBlur);
+  if (canvas) {
+    canvas.removeEventListener('pointerdown', onTouchDown);
+    canvas.removeEventListener('pointermove', onTouchMove);
+    canvas.removeEventListener('pointerup', onTouchUp);
+    canvas.removeEventListener('pointercancel', onTouchUp);
+  }
+  Object.keys(keys).forEach(k => { keys[k] = false; });
+  touchL = null; touchR = null;
+  if (shared) shared.clearParticles();
   canvas = null; ctx = null;
 }
 
@@ -165,24 +189,54 @@ function resize() {
 }
 
 function onKeyDown(e) {
-  if (e.key in keys) keys[e.key] = true;
-  if (e.key === ' ' || e.key === 'Enter') {
+  const c = e.code;
+  if (c in keys) { keys[c] = true; e.preventDefault(); }
+  if (c === 'Space' || c === 'Enter') {
+    e.preventDefault();
     if (state === 'menu') startGame();
     else if (state === 'gameover') resetMatch();
     else if (state === 'playing') togglePause();
+    else if (state === 'paused') togglePause();
   }
-  if (e.key === 'p' || e.key === 'P') togglePause();
-  if (e.key === '1') { left.ai = !left.ai; }
-  if (e.key === '2') { right.ai = !right.ai; }
+  if (c === 'KeyP') togglePause();
+  if (c === 'Digit1') { left.ai = !left.ai; }
+  if (c === 'Digit2') { right.ai = !right.ai; }
 }
 
-function onKeyUp(e) { if (e.key in keys) keys[e.key] = false; }
+function onKeyUp(e) { if (e.code in keys) keys[e.code] = false; }
+function onBlur() { Object.keys(keys).forEach(k => { keys[k] = false; }); touchL = null; touchR = null; }
+
+/* touch/mouse-drag: left half drags left paddle, right half drags right paddle */
+function canvasY(e) {
+  const r = canvas.getBoundingClientRect();
+  return (e.clientY - r.top) / r.height * H;
+}
+function onTouchDown(e) {
+  const x = (e.clientX - canvas.getBoundingClientRect().left) / canvas.getBoundingClientRect().width * W;
+  const y = canvasY(e);
+  if (state === 'menu' || state === 'gameover') { startGameIfIdle(); return; }
+  if (x < W / 2) touchL = y; else touchR = y;
+  e.preventDefault();
+}
+function onTouchMove(e) {
+  if (touchL == null && touchR == null) return;
+  const x = (e.clientX - canvas.getBoundingClientRect().left) / canvas.getBoundingClientRect().width * W;
+  const y = canvasY(e);
+  if (x < W / 2) { if (touchL != null) touchL = y; } else { if (touchR != null) touchR = y; }
+}
+function onTouchUp() { touchL = null; touchR = null; }
+function startGameIfIdle() {
+  if (state === 'menu') startGame();
+  else if (state === 'gameover') resetMatch();
+}
 
 function startGame() { state = 'playing'; resetBall(); }
 
 function gameLoop(ts) {
   if (!running) return;
-  const dt = 1/60;
+  if (!ts) ts = performance.now();
+  const dt = lastTs ? Math.min((ts - lastTs) / 1000, 1 / 20) : 1 / 60;
+  lastTs = ts;
   update(dt);
   render();
   animationId = requestAnimationFrame(gameLoop);
@@ -191,10 +245,12 @@ function gameLoop(ts) {
 function update(dt) {
   if (state !== 'playing') return;
   const move = PADDLE_SPEED * dt;
-  if (keys.w) left.y = Math.max(0, left.y - move);
-  if (keys.s) left.y = Math.min(H - PADDLE_H, left.y + move);
-  if (keys.ArrowUp) right.y = Math.max(0, right.y - move);
-  if (keys.ArrowDown) right.y = Math.min(H - PADDLE_H, right.y + move);
+  if (keys.KeyW && !left.ai) left.y = Math.max(0, left.y - move);
+  if (keys.KeyS && !left.ai) left.y = Math.min(H - PADDLE_H, left.y + move);
+  if (keys.ArrowUp && !right.ai) right.y = Math.max(0, right.y - move);
+  if (keys.ArrowDown && !right.ai) right.y = Math.min(H - PADDLE_H, right.y + move);
+  if (touchL != null && !left.ai) left.y = clamp(touchL - PADDLE_H / 2, 0, H - PADDLE_H);
+  if (touchR != null && !right.ai) right.y = clamp(touchR - PADDLE_H / 2, 0, H - PADDLE_H);
   if (left.ai) {
     const target = ball.y - PADDLE_H / 2;
     left.y += Math.sign(target - left.y) * move * 0.7;
@@ -211,11 +267,11 @@ function update(dt) {
   else if (ball.y >= H - BALL_SIZE) { ball.y = H - BALL_SIZE; ball.vy = -Math.abs(ball.vy); hitWall(ball.x, ball.y); }
   if (ball.x - BALL_SIZE <= PADDLE_W + 20) {
     if (ball.y >= left.y && ball.y <= left.y + PADDLE_H) hitPaddle('left');
-    else if (ball.x < -50) scorePoint('right');
+    else if (ball.x < -BALL_SIZE * 2) scorePoint('right');
   }
   if (ball.x + BALL_SIZE >= W - PADDLE_W - 20) {
     if (ball.y >= right.y && ball.y <= right.y + PADDLE_H) hitPaddle('right');
-    else if (ball.x > W + 50) scorePoint('left');
+    else if (ball.x > W + BALL_SIZE * 2) scorePoint('left');
   }
   ball.speed = Math.min(ball.speed * 1.008, MAX_SPEED);
   const sp = Math.hypot(ball.vx, ball.vy) || ball.speed;

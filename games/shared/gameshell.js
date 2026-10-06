@@ -18,10 +18,12 @@ const GAMES = [
 let currentGame = null;
 let currentGameModule = null;
 let fullscreen = false;
+let loadToken = 0; // guards against overlapping loads resolving out of order
 
 const shell = document.getElementById('shell');
 const selector = document.getElementById('game-selector');
 const gameHost = document.getElementById('game-host');
+const btnBack = document.getElementById('btnBack');
 const btnFullscreen = document.getElementById('btnFullscreen');
 const btnSound = document.getElementById('btnSound');
 const btnPause = document.getElementById('btnPause');
@@ -42,47 +44,83 @@ function renderSelector() {
   });
 }
 
+function showSelector() {
+  loadToken++; // invalidate any in-flight load
+  if (currentGameModule && currentGameModule.destroy) {
+    try { currentGameModule.destroy(); } catch (e) { /* ignore */ }
+    currentGameModule = null;
+  }
+  currentGame = null;
+  gameHost.innerHTML = '';
+  gameHost.hidden = true;
+  selector.hidden = false;
+  shell.classList.remove('game-active');
+  if (btnBack) btnBack.hidden = true;
+}
+
 /* ─── Load a game module ─── */
 async function loadGame(id) {
   const meta = GAMES.find(g => g.id === id);
   if (!meta) return;
-
-  /* unload previous */
-  if (currentGameModule && currentGameModule.destroy) {
-    currentGameModule.destroy();
-    currentGameModule = null;
-  }
-  currentGame = id;
 
   if (meta.standalone) {
     window.location.href = meta.path;
     return;
   }
 
+  const token = ++loadToken;
+  /* unload previous */
+  if (currentGameModule && currentGameModule.destroy) {
+    try { currentGameModule.destroy(); } catch (e) { /* ignore */ }
+    currentGameModule = null;
+  }
+  currentGame = id;
+
   gameHost.innerHTML = '<div class="loading">Loading ' + meta.name + '…</div>';
   selector.hidden = true;
   gameHost.hidden = false;
   shell.classList.add('game-active');
+  if (btnBack) btnBack.hidden = false;
 
   try {
     const mod = await import(meta.path + '?v=' + Date.now());
+    if (token !== loadToken) return; // a newer load (or back) superseded this one
     currentGameModule = mod.default || mod;
     const canvas = document.createElement('canvas');
     canvas.id = 'game-canvas';
     gameHost.innerHTML = '';
     gameHost.appendChild(canvas);
     currentGameModule.init(canvas, FrostShared);
+    /* Space/arrows must reach the game, not re-trigger the focused card */
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   } catch (e) {
+    if (token !== loadToken) return;
     console.error('Failed to load ' + id, e);
-    gameHost.innerHTML = `<div class="load-error">Failed to load ${meta.name}: ${e.message}<br><button onclick="location.reload()">Reload</button></div>`;
+    gameHost.innerHTML = '';
+    const err = document.createElement('div');
+    err.className = 'load-error';
+    err.textContent = 'Failed to load ' + meta.name + ': ' + e.message;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = 'Back to games';
+    btn.addEventListener('click', showSelector);
+    err.appendChild(document.createElement('br'));
+    err.appendChild(btn);
+    gameHost.appendChild(err);
   }
 }
 
 /* ─── Global controls ─── */
 function toggleFullscreen() {
   if (!document.fullscreenElement) {
-    shell.requestFullscreen().catch(() => {});
-  } else {
+    const rq = shell && (shell.requestFullscreen || shell.webkitRequestFullscreen);
+    if (rq) {
+      try {
+        const ret = rq.call(shell);
+        if (ret && ret.catch) ret.catch(() => {});
+      } catch (e) { /* unsupported */ }
+    }
+  } else if (document.exitFullscreen) {
     document.exitFullscreen();
   }
 }
@@ -100,6 +138,7 @@ function togglePause() {
   }
 }
 
+if (btnBack) btnBack.addEventListener('click', showSelector);
 btnFullscreen.addEventListener('click', toggleFullscreen);
 btnSound.addEventListener('click', toggleMute);
 btnPause.addEventListener('click', togglePause);
@@ -121,11 +160,15 @@ document.addEventListener('keydown', e => {
 
 /* ─── Boot ─── */
 function boot() {
-  FrostShared.unlockAudio();
+  /* AudioContext needs a user gesture — arm it on first interaction. */
+  const unlock = () => FrostShared.unlockAudio();
+  window.addEventListener('pointerdown', unlock, { once: true });
+  window.addEventListener('keydown', unlock, { once: true });
   renderSelector();
   selector.hidden = false;
   gameHost.hidden = true;
   shell.classList.remove('game-active');
+  if (btnBack) btnBack.hidden = true;
 }
 
 if (document.readyState === 'loading') {
@@ -134,5 +177,5 @@ if (document.readyState === 'loading') {
   boot();
 }
 
-window.FrostShell = { GAMES, loadGame };
-export { GAMES, loadGame };
+window.FrostShell = { GAMES, loadGame, showSelector };
+export { GAMES, loadGame, showSelector };
