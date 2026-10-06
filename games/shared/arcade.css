@@ -1,0 +1,194 @@
+/* ─── Frost Arcade Shell CSS ─── */
+:root {
+  --bg: #04080f;
+  --bg-elev: #071222;
+  --ice-100: #e8faff;
+  --ice-200: #bae6fd;
+  --ice-300: #7dd3fc;
+  --ice-400: #38bdf8;
+  --ice-500: #0ea5e9;
+  --ice-600: #0284c7;
+  --glow-ice: 0 0 24px -2px rgba(56, 189, 248, .7), 0 0 48px -6px rgba(14, 165, 233, .5);
+  --stroke: rgba(90, 210, 255, .35);
+  --gold: #ffd479;
+  --warn: #ff6b6b;
+  --ease: cubic-bezier(.2,.7,.2,1);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--ice-100);
+  line-height: 1.5;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ambient background */
+.ambient-snow {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+}
+.ambient-snow i {
+  position: absolute; top: -10%; left: var(--x);
+  width: var(--s); height: var(--s);
+  background: radial-gradient(circle at 30% 30%, #fff 0%, transparent 70%);
+  opacity: var(--o); border-radius: 50%;
+  animation: snowFall var(--d) linear infinite;
+}
+@keyframes snowFall { to { transform: translateY(110vh) translateX(20px); } }
+
+.ambient-aurora {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background: radial-gradient(ellipse 80% 50% at 20% 0%, rgba(56,189,248,.08) 0%, transparent 60%),
+              radial-gradient(ellipse 60% 40% at 80% 100%, rgba(14,165,233,.06) 0%, transparent 50%);
+  opacity: 0.6;
+}
+
+/* shell layout */
+.shell {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column;
+  height: 100vh; height: 100dvh;
+  max-width: 1200px; margin: 0 auto;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* HUD */
+.hud {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 14px; gap: 12px;
+  background: linear-gradient(180deg, rgba(10,28,50,.9), rgba(4,8,15,.7));
+  border-bottom: 1px solid var(--stroke);
+  backdrop-filter: blur(8px);
+  flex-shrink: 0;
+}
+
+.hud-brand { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 1.1rem; letter-spacing: .05em; }
+.brand-icon { font-size: 1.4em; }
+
+.hud-actions { display: flex; gap: 6px; flex: none; }
+
+.icon-btn {
+  width: 40px; height: 40px;
+  display: grid; place-items: center;
+  font-size: 15px;
+  color: var(--ice-200);
+  background: linear-gradient(180deg, rgba(24,56,92,.8), rgba(9,24,44,.8));
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform .18s var(--ease), border-color .2s, box-shadow .2s, color .2s;
+}
+.icon-btn:hover { transform: translateY(-2px); color: #fff; border-color: rgba(150,220,255,.5); box-shadow: var(--glow-ice); }
+.icon-btn:active { transform: translateY(0) scale(.94); }
+.icon-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* Selector */
+.selector {
+  flex: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 24px;
+  text-align: center;
+}
+
+.selector-title {
+  font-size: clamp(1.5rem, 4vw, 2.2rem);
+  font-weight: 900;
+  letter-spacing: .02em;
+  margin: 0 0 28px;
+  background: linear-gradient(90deg, var(--ice-100), var(--ice-400), var(--ice-100));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-transform: uppercase;
+}
+
+.selector-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  width: 100%; max-width: 900px;
+}
+
+.game-card {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 28px 20px;
+  background: linear-gradient(180deg, rgba(18,44,76,.9), rgba(7,18,34,.95));
+  border: 1px solid var(--stroke);
+  border-radius: 18px;
+  cursor: pointer;
+  transition: transform .2s var(--ease), box-shadow .25s var(--ease), border-color .2s;
+  text-decoration: none; color: inherit;
+}
+.game-card:hover, .game-card:focus-visible {
+  transform: translateY(-6px);
+  border-color: var(--ice-400);
+  box-shadow: var(--glow-ice), 0 20px 40px -16px rgba(0,0,0,.6);
+  outline: none;
+}
+.game-card:focus-visible { outline: 3px solid var(--ice-400); outline-offset: 3px; }
+
+.game-icon { font-size: 3rem; line-height: 1; margin-bottom: 10px; filter: drop-shadow(0 0 8px currentColor); }
+.game-name { font-size: 1.15rem; font-weight: 800; letter-spacing: .02em; margin-bottom: 6px; }
+.game-desc { font-size: .85rem; color: var(--ice-300); opacity: .9; line-height: 1.4; }
+
+/* Game host */
+.game-host {
+  flex: 1;
+  display: flex; align-items: center; justify-content: center;
+  width: 100%;
+  position: relative;
+}
+.game-host canvas {
+  width: 100%; height: 100%;
+  max-width: 100%; max-height: 100%;
+  display: block;
+}
+.game-host .loading, .game-host .load-error {
+  text-align: center; color: var(--ice-300); font-size: 1.1rem;
+}
+.game-host .load-error button {
+  margin-top: 16px; padding: 10px 24px;
+  background: linear-gradient(180deg, var(--ice-500), var(--ice-600));
+  color: #02121f; border: 0; border-radius: 10px;
+  font-weight: 800; cursor: pointer;
+}
+
+/* Footer */
+.arcade-footer {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 14px;
+  font-size: .75rem; color: var(--ice-300); opacity: .7;
+  flex-shrink: 0;
+}
+.footer-games { white-space: nowrap; }
+
+/* Responsive */
+@media (max-width: 600px) {
+  .hud-brand .brand-text { display: none; }
+  .icon-btn { width: 36px; height: 36px; font-size: 13px; }
+  .game-card { padding: 22px 14px; }
+  .game-icon { font-size: 2.4rem; }
+}
+
+/* Fullscreen adjustments */
+@media (display-mode: fullscreen) {
+  .shell { max-width: none; }
+  .ambient-snow, .ambient-aurora { opacity: .5; }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .ambient-snow i { animation: none; opacity: .15; }
+  .game-card { transition: none; }
+  .icon-btn { transition: none; }
+}
+
+/* High contrast */
+@media (prefers-contrast: high) {
+  :root { --stroke: rgba(255,255,255,.6); }
+  .icon-btn, .game-card { border-width: 2px; }
+}
