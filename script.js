@@ -2279,6 +2279,25 @@
     ui.btnSound.setAttribute('aria-pressed', String(next));
   }
 
+  function toggleFullscreen() {
+    const shell = document.getElementById('shell');
+    if (!document.fullscreenElement) {
+      shell.requestFullscreen().catch(function () {
+        /* user gesture required or denied */
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  }
+
+  /* Update icon when fullscreen changes (button click, ESC key, browser UI) */
+  document.addEventListener('fullscreenchange', function () {
+    if (!ui.btnFullscreen) return;
+    const isFs = !!document.fullscreenElement;
+    ui.btnFullscreen.querySelector('.ico-fullscreen').textContent = isFs ? '↙' : '↗';
+    ui.btnFullscreen.setAttribute('aria-pressed', String(isFs));
+  });
+
   function isTouch() {
     return window.matchMedia('(hover: none) and (pointer: coarse)').matches;
   }
@@ -2304,6 +2323,7 @@
     btnSound: document.getElementById('btnSound'),
     btnPause: document.getElementById('btnPause'),
     btnRestart: document.getElementById('btnRestart'),
+    btnFullscreen: document.getElementById('btnFullscreen'),
     ovMenu: document.getElementById('ovMenu'),
     ovPause: document.getElementById('ovPause'),
     ovOver: document.getElementById('ovOver'),
@@ -2364,6 +2384,7 @@
   ui.btnPause.addEventListener('click', function () { togglePause(); });
   ui.btnRestart.addEventListener('click', function () { restart(); });
   ui.btnSound.addEventListener('click', function () { Sound.unlock(); toggleMute(); });
+  ui.btnFullscreen.addEventListener('click', function () { toggleFullscreen(); });
 
   ['btnMenu2', 'btnMenu3'].forEach(function (id) {
     document.getElementById(id).addEventListener('click', function () {
