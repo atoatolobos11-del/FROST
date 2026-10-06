@@ -74,7 +74,7 @@ async function loadGame(id) {
     currentGameModule.init(canvas, FrostShared);
   } catch (e) {
     console.error('Failed to load ' + id, e);
-    gameHost.innerHTML = `<div class="load-error">Failed to load ${meta.name}<br><button onclick="location.reload()">Reload</button></div>`;
+    gameHost.innerHTML = `<div class="load-error">Failed to load ${meta.name}: ${e.message}<br><button onclick="location.reload()">Reload</button></div>`;
   }
 }
 
