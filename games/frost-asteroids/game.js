@@ -23,6 +23,8 @@
   function flash(v) { if (shared && shared.fxOn && !shared.fxOn('flash')) return; screenFlash = Math.max(screenFlash, v); }
   let shipInvuln = 0, rapidFire = 0, spreadShot = 0, shield = 0;
   let boss = null, bossActive = false;
+  let missiles = [], missileAmmo = 3, missileCd = 0;
+  const MISSILE_MAX = 5;
 
   // Input
   const keys = {};
@@ -68,6 +70,9 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
       if (state === 'playing') state = 'paused';
       else if (state === 'paused') state = 'playing';
     }
+    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'KeyX') {
+      if (state === 'playing') fireMissile();
+    }
   }
   function onKeyUp(e) { keys[e.code] = false; }
   function onBlur() { Object.keys(keys).forEach(k => { keys[k] = false; }); touchTarget = null;
@@ -77,6 +82,7 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
   export function onTouchControl(name, on) {
     if (state === 'menu' && on) { state = 'playing'; return; }
     if (state === 'gameover' && on) { reset(); state = 'playing'; return; }
+    if (name === 'missile' && on) { if (state === 'playing') fireMissile(); return; }
     if (name === 'left') touchMove.left = on;
     else if (name === 'right') touchMove.right = on;
     else if (name === 'thrust') touchMove.thrust = on;
@@ -104,6 +110,7 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
   function reset() {
     ship = { x: W/2, y: H/2, vx: 0, vy: 0, angle: -Math.PI/2, radius: 14, cooldown: 0, blink: 0 };
     bullets = []; enemies = []; pickups = []; boss = null; bossActive = false;
+    missiles = []; missileAmmo = 3; missileCd = 0;
     score = 0; lives = 3; wave = 1; waveTimer = 0; state = 'menu';
     shake = 0; screenFlash = 0; shipInvuln = 0; rapidFire = 0; spreadShot = 0; shield = 0;
     spawnWave();
@@ -153,6 +160,9 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
     bullets.forEach(b => { b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; wrap(b); });
     bullets = bullets.filter(b => b.life > 0);
 
+    // Homing missiles
+    updateMissiles(dt);
+
     // Enemy / boss bullets
     bossBullets.forEach(b => { b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; wrap(b); });
     bossBullets = bossBullets.filter(b => b.life > 0);
@@ -179,12 +189,13 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
     pickups = pickups.filter(p => p.life > 0);
 
     // Collisions
+    collideMissiles();
     checkCollisions();
 
     // Wave progression
     if (!bossActive && enemies.length === 0) {
       waveTimer -= dt;
-      if (waveTimer <= 0) { wave++; if (wave % 5 === 0) spawnBoss(); else { spawnWave(); shared.tone({ f0: 440, f1: 660, f2: 880, dur: 0.5, vol: 0.25, type: 'sine' }); } }
+      if (waveTimer <= 0) { wave++; missileAmmo = Math.min(MISSILE_MAX, missileAmmo + 1); if (wave % 5 === 0) spawnBoss(); else { spawnWave(); shared.tone({ f0: 440, f1: 660, f2: 880, dur: 0.5, vol: 0.25, type: 'sine' }); } }
     }
 
     shake = Math.max(0, shake - dt * 10);
@@ -208,6 +219,103 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
     });
 
     shared.tone({ f0: 660, f1: 440, dur: 0.05, vol: 0.12, type: 'square' });
+  }
+
+  /* --- jet launcher: homing missiles with blast damage --- */
+  function fireMissile() {
+    if (state !== 'playing' || missileCd > 0 || missileAmmo <= 0) return;
+    missileCd = 0.5;
+    missileAmmo--;
+    const a = ship.angle;
+    missiles.push({
+      x: ship.x + Math.cos(a) * 24, y: ship.y + Math.sin(a) * 24,
+      vx: Math.cos(a) * 420 + ship.vx * 0.5, vy: Math.sin(a) * 420 + ship.vy * 0.5,
+      life: 4,
+    });
+    shared.tone({ f0: 200, f1: 900, dur: 0.25, vol: 0.25, type: 'sawtooth' });
+    shared.spawnParticles({ x: ship.x, y: ship.y, count: 10, color: C.gold, speed: 200, life: 0.4, size: 3 });
+  }
+
+  function nearestTarget(m) {
+    let tgt = null, bd = 460;
+    enemies.forEach(function (e) { const d = dist(m, e); if (d < bd) { bd = d; tgt = e; } });
+    if (bossActive && boss) { const d = dist(m, boss); if (d < bd) { bd = d; tgt = boss; } }
+    return tgt;
+  }
+
+  function updateMissiles(dt) {
+    missileCd = Math.max(0, missileCd - dt);
+    missiles.forEach(function (m) {
+      const tgt = nearestTarget(m);
+      const sp = Math.hypot(m.vx, m.vy) || 540;
+      if (tgt) {
+        const want = Math.atan2(tgt.y - m.y, tgt.x - m.x);
+        let cur = Math.atan2(m.vy, m.vx), diff = want - cur;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        cur += Math.max(-4.5 * dt, Math.min(4.5 * dt, diff));
+        m.vx = Math.cos(cur) * sp;
+        m.vy = Math.sin(cur) * sp;
+      }
+      m.x += m.vx * dt; m.y += m.vy * dt; m.life -= dt;
+      wrap(m);
+      shared.spawnParticles({ x: m.x, y: m.y, count: 1, color: C.gold, speed: 20, life: 0.25, size: 2 });
+    });
+    missiles = missiles.filter(function (m) { return m.life > 0; });
+  }
+
+  function killEnemyAt(j) {
+    const e = enemies[j];
+    score += 10 * e.maxHealth;
+    if (score > highScore) { highScore = score; shared.saveScore('asteroids', highScore); }
+    shared.spawnParticles({ x: e.x, y: e.y, count: 18, color: e.color, speed: 150, life: 0.6, size: 3 });
+    shared.tone({ f0: 200, f1: 100, dur: 0.15, vol: 0.2, type: 'sawtooth' });
+    if (e.type === 'splitter') { for (let k = 0; k < 3; k++) spawnSplitter(e.x, e.y); }
+    else if (Math.random() < 0.15) spawnPickup(e.x, e.y);
+    enemies.splice(j, 1);
+  }
+
+  function explode(x, y) {
+    const R = 95;
+    shared.spawnParticles({ x: x, y: y, count: 34, color: C.gold, speed: 300, life: 0.8, size: 5 });
+    shared.spawnParticles({ x: x, y: y, count: 16, color: C.red, speed: 180, life: 0.6, size: 4 });
+    shared.tone({ f0: 120, f1: 40, dur: 0.5, vol: 0.4, type: 'sawtooth' });
+    shared.noiseBurst({ hpf: 300, dur: 0.4, vol: 0.35 });
+    kick(8); flash(0.6);
+    for (let j = enemies.length - 1; j >= 0; j--) {
+      const e = enemies[j];
+      if (Math.hypot(e.x - x, e.y - y) < R + e.size) {
+        e.health -= 2;
+        if (e.health <= 0) killEnemyAt(j);
+      }
+    }
+    if (bossActive && boss && Math.hypot(boss.x - x, boss.y - y) < R + boss.size) {
+      boss.health -= 2;
+      shared.spawnParticles({ x: boss.x, y: boss.y, count: 10, color: C.red, speed: 120, life: 0.5, size: 3 });
+    }
+  }
+
+  function collideMissiles() {
+    for (let i = missiles.length - 1; i >= 0; i--) {
+      const m = missiles[i];
+      let hit = false;
+      for (let j = enemies.length - 1; j >= 0; j--) {
+        const e = enemies[j];
+        if (Math.hypot(m.x - e.x, m.y - e.y) < e.size + 6) {
+          e.health -= 3;
+          if (e.health <= 0) killEnemyAt(j);
+          else shared.spawnParticles({ x: e.x, y: e.y, count: 8, color: C.gold, speed: 120, life: 0.4, size: 3 });
+          hit = true;
+          break;
+        }
+      }
+      if (!hit && bossActive && boss && Math.hypot(m.x - boss.x, m.y - boss.y) < boss.size + 6) {
+        boss.health -= 3;
+        shared.spawnParticles({ x: boss.x, y: boss.y, count: 8, color: C.gold, speed: 120, life: 0.4, size: 3 });
+        hit = true;
+      }
+      if (hit) { missiles.splice(i, 1); explode(m.x, m.y); }
+    }
   }
 
   function wrap(obj) { if (obj.x < 0) obj.x = W; else if (obj.x > W) obj.x = 0; if (obj.y < 0) obj.y = H; else if (obj.y > H) obj.y = 0; }
@@ -280,9 +388,9 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
   }
 
   function spawnPickup(x, y, type) {
-    const types = type === 'gold' ? ['gold'] : ['rapid', 'spread', 'shield', 'life', 'score'];
+    const types = type === 'gold' ? ['gold'] : ['rapid', 'spread', 'shield', 'life', 'score', 'rockets'];
     const t = type === 'gold' ? 'gold' : pick(types);
-    const colors = { rapid: C.ice3, spread: C.violet, shield: C.mint, life: C.red, score: C.gold, gold: C.gold };
+    const colors = { rapid: C.ice3, spread: C.violet, shield: C.mint, life: C.red, score: C.gold, gold: C.gold, rockets: '#ff7a33' };
     pickups.push({ x, y, vx: (Math.random()-0.5)*40, vy: (Math.random()-0.5)*40, type: t, color: colors[t], life: 12, bob: 0, size: 16 });
   }
 
@@ -366,6 +474,7 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
       case 'rapid': rapidFire = 8; break;
       case 'spread': spreadShot = 8; break;
       case 'shield': shield = 10; break;
+      case 'rockets': missileAmmo = Math.min(MISSILE_MAX, missileAmmo + 2); break;
       case 'life': lives = Math.min(5, lives + 1); break;
       case 'score': score += 200; if (score > highScore) { highScore = score; shared.saveScore('asteroids', highScore); } break;
       case 'gold': score += 1000; if (score > highScore) { highScore = score; shared.saveScore('asteroids', highScore); } break;
@@ -406,6 +515,16 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
     // Entities
     drawShip();
     bullets.forEach(b => { ctx.fillStyle = C.ice; ctx.beginPath(); ctx.arc(b.x,b.y,3,0,Math.PI*2); ctx.fill(); });
+    missiles.forEach(function (m) {
+      const a = Math.atan2(m.vy, m.vx);
+      ctx.save(); ctx.translate(m.x, m.y); ctx.rotate(a);
+      ctx.fillStyle = '#ffd479'; ctx.shadowColor = C.gold; ctx.shadowBlur = 10;
+      ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(-6, -4); ctx.lineTo(-6, 4); ctx.closePath(); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(255,122,51,0.9)';
+      ctx.beginPath(); ctx.moveTo(-6, -3); ctx.lineTo(-6 - 6 - Math.random() * 6, 0); ctx.lineTo(-6, 3); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    });
     bossBullets.forEach(b => { ctx.fillStyle = b.color; ctx.beginPath(); ctx.arc(b.x,b.y,5,0,Math.PI*2); ctx.fill(); });
     enemies.forEach(e => drawEnemy(e));
     if (bossActive && boss) drawBoss();
@@ -419,6 +538,8 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
     if (rapidFire > 0) { ctx.fillStyle = C.ice3; ctx.fillText('RAPID FIRE: ' + rapidFire.toFixed(1), 20, 95); }
     if (spreadShot > 0) { ctx.fillStyle = C.violet; ctx.fillText('SPREAD: ' + spreadShot.toFixed(1), 20, 120); }
     if (shield > 0) { ctx.fillStyle = C.mint; ctx.fillText('SHIELD: ' + shield.toFixed(1), 20, 145); }
+    ctx.fillStyle = missileAmmo > 0 ? C.gold : C.red;
+    ctx.fillText('ROCKETS: ' + missileAmmo + ' (SHIFT/X)', 20, 170);
 
     // Lives
     for (let i = 0; i < lives; i++) {
@@ -429,7 +550,7 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
     }
 
     // State overlays
-    if (state === 'menu') drawOverlay('FROST ASTEROIDS', 'Arrows/WASD move/rotate · Space shoot\nSurvive waves · Boss every 5 waves\nPickups: ⚡ rapid · ⬡ spread · 🛡 shield · ♥ life');
+    if (state === 'menu') drawOverlay('FROST ASTEROIDS', 'Arrows/WASD move/rotate · Space shoot · SHIFT/X homing rockets\nSurvive waves · Boss every 5 waves · +1 rocket per wave\nPickups: ⚡ rapid · ⬡ spread · 🛡 shield · ♥ life · 🚀 rockets');
     else if (state === 'paused') drawOverlay('PAUSED', 'P to resume');
     else if (state === 'gameover') drawOverlay('GAME OVER', `Score: ${score}  Best: ${highScore}\nWave reached: ${wave}\nSpace to restart`);
 
@@ -483,7 +604,7 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
     ctx.fillStyle = p.color; ctx.shadowColor = p.color; ctx.shadowBlur = 14;
     ctx.beginPath(); ctx.arc(0, 0, p.size, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0;
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const sym = { rapid: '⚡', spread: '⬡', shield: '🛡', life: '♥', score: '★', gold: '◆' }[p.type];
+    const sym = { rapid: '⚡', spread: '⬡', shield: '🛡', life: '♥', score: '★', gold: '◆', rockets: '🚀' }[p.type];
     ctx.fillText(sym, 0, 2); ctx.restore();
   }
 

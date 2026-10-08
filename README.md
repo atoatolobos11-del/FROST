@@ -66,7 +66,7 @@ audio/particle/storage engine (`games/shared/`):
 | ---- | -------- |
 | 🏓 Frost Pong | `W`/`S` + `↑`/`↓`, drag each half on touch, `1`/`2` toggle AI |
 | 🐍 Frost Snake | arrows / swipe, `Space` or tap to start |
-| ☄️ Frost Asteroids | arrows/`WASD` + `Space`, or touch to steer + autofire |
+| ☄️ Frost Asteroids | arrows/`WASD` + `Space`, `Shift`/`X` homing rockets, or touch to steer + autofire |
 | 🎱 Frost Pinball | `←`/`→` or `A`/`D` flippers, `Space` plunger, touch halves |
 | 🏀 Frost Hoops | swipe up fast on the ball, 60s shootout |
 

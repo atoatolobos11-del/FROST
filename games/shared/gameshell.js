@@ -60,6 +60,7 @@ const TOUCH_LAYOUTS = {
     ]},
     { align: 'right', buttons: [
       { name: 'thrust', label: '▲', sub: 'THRUST' },
+      { name: 'missile', label: '🚀', sub: 'BOOM' },
       { name: 'fire', label: '●', sub: 'FIRE' },
     ]},
   ],
