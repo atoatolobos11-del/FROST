@@ -182,6 +182,9 @@ body {
   object-fit: contain;
   background: #030710;
   display: block;
+  touch-action: none; /* let swipe/drag gestures reach the game, not the browser */
+  user-select: none;
+  -webkit-user-select: none;
 }
 .game-host .loading, .game-host .load-error {
   text-align: center; color: var(--ice-300); font-size: 1.1rem;

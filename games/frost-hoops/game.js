@@ -386,7 +386,9 @@ function onPointerDown(e) {
   if (state === 'gameover') { reset(); state = 'ready'; e.preventDefault(); return; }
   if (state === 'paused') { state = pausedFrom; e.preventDefault(); return; }
   if (state !== 'ready') return;
-  if (Math.hypot(p.x - ball.x, p.y - ball.y) > 90) return; // must grab the ball
+  const nearBall = Math.hypot(p.x - ball.x, p.y - ball.y) <= 130;
+  const bottomZone = p.y > H - 170; // forgiving grab area along the floor
+  if (!nearBall && !bottomZone) return; // must grab the ball area
   dragTrail = [{ x: p.x, y: p.y, t: p.t }];
   state = 'aiming';
   e.preventDefault();
