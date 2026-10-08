@@ -45,6 +45,7 @@ let dragTrail = null; // [{x,y,t}] while aiming
 let flightMinY = 0;
 let resolved = true;
 let hasShot = false; // clock starts on first shot, not on boot
+let lastError = null; // shown on-canvas if a frame ever throws
 
 function rimRx() { return 72 / diffMult(); }
 function swaySpeed() { return (0.5 + score * 0.05) * diffMult(); }
@@ -598,12 +599,27 @@ function resize() {
 
 function loop(ts) {
   if (!running) return;
-  if (!ts) ts = performance.now();
-  const dt = lastTs ? Math.min((ts - lastTs) / 1000, 1 / 20) : 1 / 60;
-  lastTs = ts;
-  update(dt);
-  render();
+  try {
+    if (!ts) ts = performance.now();
+    const dt = lastTs ? Math.min((ts - lastTs) / 1000, 1 / 20) : 1 / 60;
+    lastTs = ts;
+    update(dt);
+    render();
+  } catch (err) {
+    // never let one bad frame kill the game — show it instead
+    lastError = String((err && err.message) || err).slice(0, 140);
+  }
   animationId = requestAnimationFrame(loop);
+  if (lastError && ctx) {
+    try {
+      ctx.fillStyle = 'rgba(120,10,10,0.92)';
+      ctx.fillRect(10, H - 44, W - 20, 34);
+      ctx.font = 'bold 14px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#fff';
+      ctx.fillText('ERR: ' + lastError, 20, H - 22);
+    } catch (e) { /* ignore */ }
+  }
 }
 
 export function init(c, sh) {
