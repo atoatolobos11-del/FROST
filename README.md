@@ -57,6 +57,10 @@ open the printed LAN URL (e.g. `http://192.168.1.20:8080`).
 
 On phones and tablets an on-screen control bar appears automatically.
 
+Gamepads work everywhere they make sense: stick/d-pad moves, `A` confirms
+and launches, `Start` pauses (Breakout, Pong, Snake, Asteroids, Pinball menus;
+Hoops flicks still need touch/mouse).
+
 ## 🕹️ Frost Arcade (`games/shell.html`)
 
 The same project also ships a mini arcade with **5 extra games** sharing one
@@ -165,6 +169,31 @@ frost-breakout/
 Core hooks in `script.js`: `Sound.setVolume/getVolume`, `difficultyMult()`,
 `fxOn()/guardedShake()`, `window` events `fb:*`, `saveRun/loadRun/clearRun`,
 `startMode()/continueRun()`, endless/custom level builders.
+
+## 🆕 Round 2 systems
+
+- **More power-ups**: 🔫 Laser Barrage (twin bolts, 10s), 🍯 Sticky Frost
+  (catch + relaunch with Space, 14s), ⏳ Glacier Time (60% ball speed, 8s).
+  Menu legend + paddle indicators included.
+- **Boss levels**: levels 4 and 8 hide a drifting ❄ Frost Core (12/16 HP)
+  with an HP bar; +500 on the kill.
+- **Auto difficulty** (Breakout, on by default): flawless levels speed the
+  ball up to +20%, costly levels slow it down to −20%. Drift persists in
+  `frost-breakout:drift`; toggle in Settings.
+- **Vibration**: guarded `buzz()` in the engine + `FrostShared.buzz()` for the
+  arcade (paddle hits, eats, bumpers, baskets, level events). Toggle in Settings.
+- **Music**: generative Am–F–C–G bass + arp box in both engines, very quiet,
+  starts on first gesture, obeys mute/volume. Toggle in Settings.
+- **Gamepad**: auto-detected everywhere. Breakout: stick/d-pad + A + Start.
+  Pong/Snake/Asteroids/Pinball/Hoopsmenus: stick/d-pad + buttons mapped to
+  each game's verbs (Hoops flicks still need touch/mouse).
+- **Online leaderboards** (opt-in): local top-10 boards are automatic in all
+  six games; point `REMOTE_BOARD_URL` (in `games/shared/frost-shared.js` and
+  `extras.js`) at an endpoint to also push/fetch global rows:
+  `POST {game, name, score, date} -> 200`, `GET ?game=<id> -> [{n, s, d}]`.
+  Free option: a Supabase table `scores(game text, name text, score int,
+  date date)` with a read/write API route, or a 30-line Cloudflare Worker
+  with KV. Until configured, everything works offline-first.
 
 ## 🧩 How `script.js` is organised
 

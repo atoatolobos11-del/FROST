@@ -190,19 +190,36 @@ export function onTouchControl(name, on) {
   }
 
   let lastTs = 0;
+  let padPrev = null;
   function loop(ts) {
     if (!running) return;
     if (!ts) ts = performance.now();
     const dt = lastTs ? Math.min((ts - lastTs) / 1000, 1 / 20) : 1 / 60;
     lastTs = ts;
-    update(dt);
+    const pad = shared.pollPad(padPrev);
+    padPrev = pad._prev || padPrev;
+    if (pad._edgeA) {
+      if (state === 'menu') state = 'playing';
+      else if (state === 'gameover') { reset(); state = 'playing'; }
+      else if (state === 'playing') state = 'paused';
+      else if (state === 'paused') state = 'playing';
+    } else if (pad._edgeStart && (state === 'playing' || state === 'paused')) {
+      state = state === 'playing' ? 'paused' : 'playing';
+    }
+    update(dt, pad);
     render();
     animationId = requestAnimationFrame(loop);
   }
 
   let acc = 0;
-  function update(dt) {
+  function update(dt, pad) {
     if (state !== 'playing') return;
+    if (pad && pad.active) {
+      if (pad.axis < -0.5 && dir.x !== 1) nextDir = { x: -1, y: 0 };
+      else if (pad.axis > 0.5 && dir.x !== -1) nextDir = { x: 1, y: 0 };
+      else if (pad.axisY < -0.5 && dir.y !== 1) nextDir = { x: 0, y: -1 };
+      else if (pad.axisY > 0.5 && dir.y !== -1) nextDir = { x: 0, y: 1 };
+    }
     if (shieldT > 0) shieldT = Math.max(0, shieldT - dt);
     acc += dt;
     if (acc < 1 / speed) return;
@@ -245,6 +262,7 @@ export function onTouchControl(name, on) {
       if (food.type === 'gold') { score += 50; shared.tone({ f0: 880, f1: 1320, dur: 0.3, vol: 0.3, type: 'sine' }); }
       else if (food.type === 'speed') { speed = Math.min(MAX_SPEED, speed + 2); shared.tone({ f0: 660, f1: 880, dur: 0.2, vol: 0.2, type: 'triangle' }); }
       else { shared.tone({ f0: 440, f1: 660, dur: 0.1, vol: 0.2, type: 'triangle' }); }
+      shared.buzz(12);
 
       if (score > highScore) { highScore = score; shared.saveScore('snake', highScore); }
 
@@ -307,6 +325,7 @@ export function onTouchControl(name, on) {
   function gameOver() {
     state = 'gameover';
     kick(15);
+    shared.buzz(80);
     shared.recordBoard('snake', score);
     shared.tone({ f0: 150, f1: 60, dur: 0.5, vol: 0.4, type: 'sawtooth' });
     shared.spawnParticles({

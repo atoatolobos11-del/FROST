@@ -94,9 +94,18 @@ function scorePoint(side) {
     speed: 250, life: 0.8, size: 4, gravity: 80
   });
   kick(12);
+  shared.buzz(25);
   if (left.score >= WIN_SCORE) { winner = 'left'; state = 'gameover'; shared.recordBoard('pong', Math.max(left.score, right.score)); }
   else if (right.score >= WIN_SCORE) { winner = 'right'; state = 'gameover'; shared.recordBoard('pong', Math.max(left.score, right.score)); }
   else { resetBall(); }
+}
+
+/* gamepad: stick drives the human paddle, A advances menus, Start pauses */
+let padPrev = null;
+function pollPadLocal() {
+  const pad = shared.pollPad(padPrev);
+  padPrev = pad._prev || padPrev;
+  return pad;
 }
 
 function resetBall() {
@@ -254,14 +263,27 @@ function gameLoop(ts) {
   if (!ts) ts = performance.now();
   const dt = lastTs ? Math.min((ts - lastTs) / 1000, 1 / 20) : 1 / 60;
   lastTs = ts;
-  update(dt);
+  const pad = pollPadLocal();
+  if (pad._edgeA) {
+    if (state === 'menu') startGame();
+    else if (state === 'gameover') resetMatch();
+    else togglePause();
+  } else if (pad._edgeStart && (state === 'playing' || state === 'paused')) {
+    togglePause();
+  }
+  update(dt, pad);
   render();
   animationId = requestAnimationFrame(gameLoop);
 }
 
-function update(dt) {
+function update(dt, pad) {
   if (state !== 'playing') return;
   const move = PADDLE_SPEED * dt;
+  if (pad && pad.active) {
+    if (!left.ai) left.y = clamp(left.y + pad.axis * move, 0, H - PADDLE_H);
+    else if (!right.ai) right.y = clamp(right.y + pad.axis * move, 0, H - PADDLE_H);
+    if (pad._edgeStart) togglePause();
+  }
   if (keys.KeyW && !left.ai) left.y = Math.max(0, left.y - move);
   if (keys.KeyS && !left.ai) left.y = Math.min(H - PADDLE_H, left.y + move);
   if (keys.ArrowUp && !right.ai) right.y = Math.max(0, right.y - move);

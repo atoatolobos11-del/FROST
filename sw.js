@@ -1,5 +1,5 @@
 /* Frost Breakout service worker — offline-first cache */
-const CACHE = 'frost-breakout-v4';
+const CACHE = 'frost-breakout-v5';
 const CORE = [
   './',
   './index.html',

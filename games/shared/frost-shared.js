@@ -35,6 +35,8 @@ export function getSettings() {
     particles: (g.particles ?? l.particles ?? SETTINGS_DEFAULTS.particles) !== false,
     flash: (g.flash ?? l.flash ?? SETTINGS_DEFAULTS.flash) !== false,
     muted: !!(g.muted ?? (l.muted === true) ?? SETTINGS_DEFAULTS.muted),
+    vibrate: (g.vibrate ?? true) !== false,
+    music: (g.music ?? true) !== false,
   };
 }
 
@@ -170,6 +172,95 @@ export function setVolume(v) {
   saveSettings({ volume: Math.min(1, Math.max(0, Number(v) || 0)) });
 }
 export function getVolume() { return volume; }
+
+/* ─── Vibration (mobile juice, guarded by setting) ─── */
+export function buzz(pat) {
+  try {
+    if (getSettings().vibrate === false) return;
+    if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(pat);
+  } catch (e) { /* ignore */ }
+}
+
+/* ─── Generative music box (quiet frost loop, same tune family as Breakout) ─── */
+const MusicBox = { on: false, timer: null, step: 0 };
+const MUSIC_BASS = [110, 110, 87.31, 87.31, 130.81, 130.81, 98, 98];
+const MUSIC_ARP = [220, 261.63, 329.63, 440, 329.63, 261.63];
+export function musicStart() {
+  if (MusicBox.on || !getSettings().music) return;
+  if (!getAudioContext()) return;
+  MusicBox.on = true;
+  MusicBox.timer = setInterval(() => {
+    if (!MusicBox.on || muted) { MusicBox.step++; return; }
+    try {
+      if (typeof document !== 'undefined' && document.hidden) { MusicBox.step++; return; }
+    } catch (e) { /* ignore */ }
+    const s = MusicBox.step++;
+    if (s % 2 === 0) tone({ f0: MUSIC_BASS[Math.floor(s / 2) % 8], type: 'sine', dur: 0.34, vol: 0.05 });
+    if (s % 4 === 2 && Math.random() < 0.7) {
+      const n = MUSIC_ARP[(s >> 2) % MUSIC_ARP.length];
+      tone({ f0: n * 2, type: 'sine', dur: 0.22, vol: 0.025 });
+      tone({ f0: n, type: 'triangle', dur: 0.26, vol: 0.03 });
+    }
+  }, 210);
+}
+export function musicStop() {
+  MusicBox.on = false;
+  if (MusicBox.timer) { clearInterval(MusicBox.timer); MusicBox.timer = null; }
+}
+
+/* ─── Gamepad helper: returns axis + edge-triggered buttons ─── */
+export function pollPad(prev) {
+  const out = { axis: 0, axisY: 0, a: false, b: false, start: false, active: false, _edgeA: false, _edgeB: false, _edgeStart: false };
+  try {
+    const pads = (typeof navigator !== 'undefined' && navigator.getGamepads && navigator.getGamepads()) || [];
+    let gp = null;
+    for (let i = 0; i < pads.length; i++) { if (pads[i] && pads[i].connected) { gp = pads[i]; break; } }
+    if (!gp) return out;
+    out.active = true;
+    if (gp.axes && Math.abs(gp.axes[0]) > 0.25) out.axis = Math.max(-1, Math.min(1, gp.axes[0]));
+    if (gp.axes && gp.axes.length > 1 && Math.abs(gp.axes[1]) > 0.25) out.axisY = Math.max(-1, Math.min(1, gp.axes[1]));
+    if (gp.buttons[14] && gp.buttons[14].pressed) out.axis = -1;
+    if (gp.buttons[15] && gp.buttons[15].pressed) out.axis = 1;
+    if (gp.buttons[12] && gp.buttons[12].pressed) out.axisY = -1;
+    if (gp.buttons[13] && gp.buttons[13].pressed) out.axisY = 1;
+    out.a = !!(gp.buttons[0] && gp.buttons[0].pressed);
+    out.b = !!(gp.buttons[1] && gp.buttons[1].pressed);
+    out.start = !!(gp.buttons[9] && gp.buttons[9].pressed);
+    const p = prev || {};
+    out._edgeA = out.a && !p.a;
+    out._edgeB = out.b && !p.b;
+    out._edgeStart = out.start && !p.start;
+    out._prev = { a: out.a, b: out.b, start: out.start };
+  } catch (e) { /* no gamepad API */ }
+  return out;
+}
+
+/* ─── Online leaderboard client (opt-in; inert until configured) ───
+ * Point REMOTE_BOARD_URL at any endpoint with:
+ *   POST {game, name, score, date} -> 200
+ *   GET ?game=<id> -> [{n, s, d}]
+ * See README "Online leaderboards" for a free Supabase/Worker setup. */
+export const REMOTE_BOARD_URL = '';
+export async function pushRemote(gameKey, entry) {
+  if (!REMOTE_BOARD_URL) return false;
+  try {
+    const r = await fetch(REMOTE_BOARD_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ game: gameKey, name: entry.n, score: entry.s, date: entry.d }),
+    });
+    return r.ok;
+  } catch (e) { return false; }
+}
+export async function fetchRemote(gameKey) {
+  if (!REMOTE_BOARD_URL) return null;
+  try {
+    const r = await fetch(REMOTE_BOARD_URL + '?game=' + encodeURIComponent(gameKey));
+    if (!r.ok) return null;
+    const arr = await r.json();
+    return Array.isArray(arr) ? arr.slice(0, 10) : null;
+  } catch (e) { return null; }
+}
 
 /* ─── Particle pool ─── */
 const PARTICLE_CAP = 500;
@@ -313,6 +404,7 @@ export function recordBoard(gameKey, score, extra) {
   board.sort((a, b) => b.s - a.s);
   const rank = board.indexOf(entry) + 1;
   try { localStorage.setItem(boardKey(gameKey), JSON.stringify(board.slice(0, BOARD_MAX))); } catch (e) { /* private mode */ }
+  if (rank <= BOARD_MAX && REMOTE_BOARD_URL) pushRemote(gameKey, entry);
   return rank <= BOARD_MAX ? rank : 0;
 }
 

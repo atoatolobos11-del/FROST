@@ -55,8 +55,8 @@ export function destroy() {
 
   function onKeyDown(e) {
     const c = e.code;
-    if (c === 'ArrowLeft' || c === 'KeyA') flippers.left.up = true;
-    if (c === 'ArrowRight' || c === 'KeyD') flippers.right.up = true;
+    if (c === 'ArrowLeft' || c === 'KeyA') { flippers.left.up = true; keyL = true; }
+    if (c === 'ArrowRight' || c === 'KeyD') { flippers.right.up = true; keyR = true; }
     if (c === 'Space' || c === 'Enter') {
       e.preventDefault();
       if (state === 'menu') launchBall();
@@ -75,13 +75,13 @@ export function destroy() {
   }
   function onKeyUp(e) {
     const c = e.code;
-    if (c === 'ArrowLeft' || c === 'KeyA') flippers.left.up = false;
-    if (c === 'ArrowRight' || c === 'KeyD') flippers.right.up = false;
+    if (c === 'ArrowLeft' || c === 'KeyA') { flippers.left.up = false; keyL = false; }
+    if (c === 'ArrowRight' || c === 'KeyD') { flippers.right.up = false; keyR = false; }
     if (c === 'Space' || c === 'Enter') {
       if (plunger.charging) { launchBall(plunger.pulled); plunger.charging = false; plunger.pulled = 0; }
     }
   }
-  function onBlur() { flippers.left.up = false; flippers.right.up = false; plunger.charging = false; plunger.pulled = 0; }
+  function onBlur() { flippers.left.up = false; flippers.right.up = false; keyL = keyR = false; plunger.charging = false; plunger.pulled = 0; }
 
   /* touch: left half = left flipper, right half = right flipper.
      Tap the plunger lane (far right) with no ball in play to launch. */
@@ -116,8 +116,8 @@ export function destroy() {
     }
     if (state === 'menu' && on) return;
     if (state === 'help' && on) { state = helpFrom; return; }
-    if (name === 'left') flippers.left.up = on;
-    else if (name === 'right') flippers.right.up = on;
+    if (name === 'left') { flippers.left.up = on; touchL = on; }
+    else if (name === 'right') { flippers.right.up = on; touchR = on; }
   }
 
   function resize() { const dpr = Math.min(window.devicePixelRatio || 1, 2.5); canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
@@ -180,11 +180,36 @@ export function destroy() {
   }
 
   let lastTs = 0;
+  let padPrev = null, padWasA = false;
+  let keyL = false, keyR = false, touchL = false, touchR = false;
   function loop(ts) { if (!running) return;
     if (!ts) ts = performance.now();
     const dt = lastTs ? Math.min((ts - lastTs) / 1000, 1 / 20) : 1 / 60;
     lastTs = ts;
-    update(dt); render(); animationId = requestAnimationFrame(loop); }
+    const pad = shared.pollPad(padPrev);
+    padPrev = pad._prev || padPrev;
+    // gamepad: stick/d-pad = flippers, A = plunger (hold & release), Start = pause
+    if (pad.active) {
+      if (pad.axis < -0.5) flippers.left.up = true;
+      else if (!keyL && !touchL) flippers.left.up = false;
+      if (pad.axis > 0.5) flippers.right.up = true;
+      else if (!keyR && !touchR) flippers.right.up = false;
+      if (pad._edgeA) {
+        if (state === 'menu') launchBall();
+        else if (state === 'gameover') reset();
+        else if (state === 'playing') plunger.charging = true;
+      }
+      if (padWasA && !pad.a && plunger.charging) {
+        launchBall(plunger.pulled); plunger.charging = false; plunger.pulled = 0;
+      }
+      padWasA = pad.a;
+      if (pad._edgeStart && (state === 'playing' || state === 'paused')) {
+        state = state === 'playing' ? 'paused' : 'playing';
+      }
+    }
+    update(dt, pad);
+    render();
+    animationId = requestAnimationFrame(loop); }
 
   function update(dt) {
     if (state !== 'playing') return;
@@ -229,6 +254,7 @@ export function destroy() {
           b.hits++; score += 100; b.active = false;
           bumperTimers.push(setTimeout(() => { b.active = true; }, 300));
           shared.tone({ f0: 660 + b.hits * 50, f1: 440, dur: 0.08, vol: 0.2, type: 'sine' });
+          shared.buzz(12);
           shared.spawnParticles({ x: b.x, y: b.y, count: 12, color: b.color, speed: 150, life: 0.4, size: 4 });
           kick(3);
         }
@@ -274,7 +300,7 @@ export function destroy() {
       // Out of bounds (bottom)
       if (ball.y > H + 50) {
         ball.lost = true; ballsInPlay--;
-        if (ballsInPlay <= 0) { state = 'gameover'; shared.recordBoard('pinball', score); shared.tone({ f0: 100, f1: 60, dur: 0.5, vol: 0.4, type: 'sawtooth' }); }
+        if (ballsInPlay <= 0) { state = 'gameover'; shared.recordBoard('pinball', score); shared.buzz(60); shared.tone({ f0: 100, f1: 60, dur: 0.5, vol: 0.4, type: 'sawtooth' }); }
       }
     });
 

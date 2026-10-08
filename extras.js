@@ -19,6 +19,9 @@
       shake: (m.shake !== false),
       particles: (m.particles !== false),
       flash: (m.flash !== false),
+      auto: (m.auto !== false),
+      vibrate: (m.vibrate !== false),
+      music: (m.music !== false),
     };
   }
   function setSettings(patch) {
@@ -56,6 +59,7 @@
 
   /* ---------- breakout leaderboard (same store as the arcade shell) ---------- */
   const BOARD_KEY = 'frost-arcade:board:breakout';
+  const REMOTE_BOARD_URL = ''; // paste your endpoint to enable global boards (see README)
   function playerName() {
     try { return (localStorage.getItem('frost-arcade:player') || 'YOU').slice(0, 12) || 'YOU'; }
     catch (e) { return 'YOU'; }
@@ -74,6 +78,15 @@
     board.sort((a, b) => b.s - a.s);
     const rank = board.indexOf(entry) + 1;
     saveJSON(BOARD_KEY, board.slice(0, 10));
+    if (rank <= 10 && REMOTE_BOARD_URL) {
+      try {
+        fetch(REMOTE_BOARD_URL, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ game: 'breakout', name: entry.n, score: entry.s, date: entry.d }),
+        }).catch(() => { /* offline */ });
+      } catch (e) { /* ignore */ }
+    }
     return rank <= 10 ? rank : 0;
   }
 
@@ -153,6 +166,9 @@
     const sh = $('setShake'); if (sh) sh.checked = !!s.shake;
     const pa = $('setParticles'); if (pa) pa.checked = !!s.particles;
     const fl = $('setFlash'); if (fl) fl.checked = !!s.flash;
+    const au = $('setAuto'); if (au) au.checked = !!s.auto;
+    const vi = $('setVibrate'); if (vi) vi.checked = !!s.vibrate;
+    const mu = $('setMusic'); if (mu) mu.checked = !!s.music;
   }
   function renderLevels() {
     const host = $('levelGrid');
@@ -194,6 +210,26 @@
           String(e.n).replace(/[<>&"]/g, '') + (e.m && e.m !== 'classic' ? ' · ' + String(e.m).replace(/[<>&"]/g, '') : '') +
           '</span><span class="pts">' + Number(e.s).toLocaleString() + '</span></li>'
         ).join('');
+        if (REMOTE_BOARD_URL) {
+          const li = document.createElement('li');
+          li.className = 'board-empty';
+          li.style.border = '0';
+          li.style.background = 'none';
+          li.textContent = '🌐 Loading global top…';
+          bl.appendChild(li);
+          fetch(REMOTE_BOARD_URL + '?game=breakout').then((r) => r.json()).then((rows) => {
+            if (!Array.isArray(rows) || !bl.isConnected) return;
+            li.textContent = '🌐 Global top';
+            rows.slice(0, 5).forEach((e, i) => {
+              const g = document.createElement('li');
+              g.innerHTML = '<span class="rank">' + (i + 1) + '</span><span class="who">' +
+                String(e.n || '?').replace(/[<>&"]/g, '') + '</span><span class="pts">' +
+                Number(e.s || 0).toLocaleString() + '</span>';
+              bl.appendChild(g);
+            });
+            if (!rows.length) li.textContent = '🌐 No global scores yet.';
+          }).catch(() => { li.textContent = '🌐 Global board offline.'; });
+        }
       }
     }
   }
@@ -374,6 +410,13 @@
     const sh = $('setShake'); if (sh) sh.addEventListener('change', () => setSettings({ shake: sh.checked }));
     const pa = $('setParticles'); if (pa) pa.addEventListener('change', () => setSettings({ particles: pa.checked }));
     const fl = $('setFlash'); if (fl) fl.addEventListener('change', () => setSettings({ flash: fl.checked }));
+    const au = $('setAuto'); if (au) au.addEventListener('change', () => setSettings({ auto: au.checked }));
+    const vi = $('setVibrate'); if (vi) vi.addEventListener('change', () => setSettings({ vibrate: vi.checked }));
+    const mu = $('setMusic');
+    if (mu) mu.addEventListener('change', () => {
+      setSettings({ music: mu.checked });
+      try { if (FB() && FB().music) FB().music(mu.checked); } catch (e) { /* ignore */ }
+    });
     bind('btnWipe', () => {
       if (!window.confirm('Reset bests, stats and achievements?')) return;
       ['frost-breakout:best', 'frost-breakout:meta', 'frost-breakout:ach', 'frost-breakout:run'].forEach((k) => { try { localStorage.removeItem(k); } catch (e) {} });

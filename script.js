@@ -305,6 +305,37 @@
       if (recipe) recipe();
     }
 
+    /* --- generative Frost theme: soft bass + sparse arp, very quiet ------ */
+    const Music = {
+      on: false, timer: null, step: 0,
+      // Am – F – C – G, two bars each
+      bass: [110, 110, 87.31, 87.31, 130.81, 130.81, 98, 98],
+      arp: [220, 261.63, 329.63, 440, 329.63, 261.63],
+      start: function () {
+        if (Music.on || !getSettings().music) return;
+        if (!init()) return;
+        Music.on = true;
+        Music.timer = setInterval(function () {
+          if (!Music.on || muted) { Music.step++; return; }
+          if (document.hidden) { Music.step++; return; }
+          const s = Music.step++;
+          if (s % 2 === 0) {
+            const bar = Math.floor(s / 2) % 8;
+            tone({ f0: Music.bass[bar], type: 'sine', dur: 0.34, vol: 0.055 });
+          }
+          if (s % 4 === 2 && Math.random() < 0.7) {
+            const n = Music.arp[(s >> 2) % Music.arp.length];
+            tone({ f0: n * 2, type: 'sine', dur: 0.22, vol: 0.028 });
+            tone({ f0: n, type: 'triangle', dur: 0.26, vol: 0.035 });
+          }
+        }, 210);
+      },
+      stop: function () {
+        Music.on = false;
+        if (Music.timer) { clearInterval(Music.timer); Music.timer = null; }
+      },
+    };
+
     return {
       unlock: unlock,
       loadSamples: loadSamples,
@@ -325,6 +356,8 @@
         } catch (e) { /* ignore */ }
         applyGain();
       },
+      musicStart: function () { Music.start(); },
+      musicStop: function () { Music.stop(); },
       getVolume: function () { return volume; },
     };
   })();
@@ -349,19 +382,22 @@
     fast:    { key: 'fast',    glyph: '⚡', label: 'FROST DASH',  color: C.gold,   tag: 'FAST' },
     diamond: { key: 'diamond', glyph: '💎', label: 'BONUS',       color: C.mint,   tag: '+$' },
     shield:  { key: 'shield',  glyph: '🛡️', label: 'FROST SHIELD', color: [190, 200, 255], tag: 'SHIELD' },
+    laser:   { key: 'laser',   glyph: '🔫', label: 'LASER BARRAGE', color: [255, 150, 150], tag: 'ZAP' },
+    sticky:  { key: 'sticky',  glyph: '🍯', label: 'STICKY FROST', color: C.gold,   tag: 'STICK' },
+    slow:    { key: 'slow',    glyph: '⏳', label: 'GLACIER TIME', color: C.violet, tag: 'SLOW' },
   };
-  const PU_ORDER = ['multi', 'wide', 'fast', 'diamond', 'shield'];
+  const PU_ORDER = ['multi', 'wide', 'fast', 'diamond', 'shield', 'laser', 'sticky', 'slow'];
 
   /* --- level blueprints --------------------------------------------------- */
   const LEVELS = [
     { name: 'GLACIER SHELF',   pattern: 'solid',     rows: 5, speed: 330, drop: 0.085 },
     { name: 'FROST PYRAMID',   pattern: 'pyramid',   rows: 6, speed: 344, drop: 0.090 },
     { name: 'CRYSTAL TIDES',   pattern: 'waves',     rows: 7, speed: 358, drop: 0.095 },
-    { name: 'FROZEN FORTRESS', pattern: 'fortress',  rows: 7, speed: 374, drop: 0.100 },
+    { name: 'FROZEN FORTRESS', pattern: 'fortress',  rows: 7, speed: 374, drop: 0.100, boss: true },
     { name: 'DIAMOND CORE',    pattern: 'diamond',   rows: 8, speed: 392, drop: 0.105 },
     { name: 'AURORA CROSS',    pattern: 'cross',     rows: 8, speed: 408, drop: 0.110 },
     { name: 'ICE CATHEDRAL',   pattern: 'cathedral', rows: 9, speed: 426, drop: 0.118 },
-    { name: 'HEART OF WINTER', pattern: 'chevron',   rows: 9, speed: 448, drop: 0.130 },
+    { name: 'HEART OF WINTER', pattern: 'chevron',   rows: 9, speed: 448, drop: 0.130, boss: true },
   ];
 
   /* --- layout masks: (c, r, cols, rows) → boolean ------------------------- */
@@ -644,6 +680,9 @@
       shake: (m.shake !== false),
       particles: (m.particles !== false),
       flash: (m.flash !== false),
+      auto: (m.auto !== false),
+      vibrate: (m.vibrate !== false),
+      music: (m.music !== false),
     };
   }
   function difficultyMult() {
@@ -652,7 +691,25 @@
   }
   function fxOn(kind) { return getSettings()[kind] !== false; }
   function guardedShake(v) { if (fxOn('shake')) G.shake = Math.max(G.shake, v); }
-  function effectiveSpeed(base) { return base * difficultyMult(); }
+  function effectiveSpeed(base) {
+    const auto = getSettings().auto === false ? 1 : (G.autoDrift || 1);
+    return base * difficultyMult() * auto;
+  }
+  function buzz(pat) {
+    try {
+      if (getSettings().vibrate === false) return;
+      if (navigator.vibrate) navigator.vibrate(pat);
+    } catch (e) { /* ignore */ }
+  }
+  function loadDrift() {
+    try {
+      const d = parseFloat(localStorage.getItem('frost-breakout:drift'));
+      if (!isNaN(d)) G.autoDrift = Math.min(1.2, Math.max(0.8, d));
+    } catch (e) { /* ignore */ }
+  }
+  function saveDrift() {
+    try { localStorage.setItem('frost-breakout:drift', String(G.autoDrift)); } catch (e) { /* ignore */ }
+  }
 
   const G = {
     state: 'menu',            // menu | serve | play | levelclear | dying | gameover | victory
@@ -673,6 +730,11 @@
     shake: 0,
     mode: 'classic',        // classic | daily | endless | custom
     endlessDepth: 0,
+    boss: null,
+    laserT: 0, stickyT: 0, slowT: 0, laserCd: 0,
+    bolts: [],
+    livesAtLevelStart: START_LIVES,
+    autoDrift: 1,
     paddle: new Paddle(),
     balls: [],
     bricks: [],
@@ -735,8 +797,7 @@
   }
 
   function buildLevel(level) {
-    const cfg = LEVELS[level - 1];
-    const cols = level >= 5 ? 13 : level >= 3 ? 12 : 11;
+    const cfg = LEVELS[level - 1];    const cols = level >= 5 ? 13 : level >= 3 ? 12 : 11;
     const rows = cfg.rows;
     const padX = 16, gapX = 6, gapY = 7;
     const cw = (PLAY.w - padX * 2 - gapX * (cols - 1)) / cols;
@@ -796,6 +857,19 @@
     G.bricks = bricks;
     G.bricksTotal = bricks.filter(function (b) { return !b.indestructible; }).length;
     brickGlowDirty = true;
+    /* boss core: a huge drifting crystal above the formation */
+    G.boss = null;
+    if (cfg.boss) {
+      const bw = Math.min(320, PLAY.w * 0.42);
+      const boss = new Brick(W / 2 - bw / 2, PLAY.y + 10, bw, 30, BT.ember);
+      boss.boss = true;
+      boss.maxHp = boss.hp = 8 + level;
+      boss.baseX = boss.x;
+      G.bricks.push(boss);
+      G.bricksTotal += 1;
+      G.boss = boss;
+      brickGlowDirty = true;
+    }
   }
 
   function shuffle(arr) {
@@ -841,6 +915,7 @@
     G.texts.length = 0;
     G.paddle = new Paddle();
     emit('runstart', { mode: G.mode, level: G.level });
+    if (getSettings().music) Sound.musicStart();
     loadLevel(G.level, { keepMode: true });
   }
 
@@ -874,6 +949,7 @@
   function loadLevel(level, opts) {
     opts = opts || {};
     if (!opts.keepMode && !G.mode) G.mode = 'classic';
+    G.boss = null;
     if (G.mode === 'endless' && !opts.keepMode) { /* endless advances via depth */ }
     G.level = level;
     if (G.customBricks && G.mode === 'custom') {
@@ -914,6 +990,9 @@
     G.shield = 0;
     G.combo = 0;
     G.powerups.length = 0;
+    G.bolts.length = 0;
+    G.laserT = 0; G.stickyT = 0; G.slowT = 0;
+    G.livesAtLevelStart = G.lives;
     newBallOnPaddle();
     const lname = (G.mode === 'custom' && G.customName) ? G.customName : LEVELS[Math.min(level, LEVELS.length) - 1].name;
     showBanner((G.mode === 'classic' ? 'LEVEL ' + level : G.mode.toUpperCase() + ' · ' + level), lname);
@@ -1010,6 +1089,12 @@
       spawnRing(b.x + b.w / 2, b.y + b.h / 2, b.type.aura, 4, b.w * 1.5, 0.45, 3);
       guardedShake(4);
       emit('brick', { type: b.type.label, score: b.type.score, combo: G.combo, level: G.level });
+      buzz(14);
+      if (b.boss) {
+        addScore(500);
+        showBanner('CORE DESTROYED', '+' + 500, 1.6);
+        spawnBurst(b.x + b.w / 2, b.y + b.h / 2, C.gold, 30, 420);
+      }
 
       const mult = comboMult();
       addScore(b.type.score * mult);
@@ -1072,6 +1157,18 @@
     addScore(bonus);
     spawnText(W / 2, PLAY.y + PLAY.h * 0.62, '+' + bonus, C.ice, 30, 70);
     Sound.play('level');
+    buzz([25, 40, 25]);
+    /* auto difficulty: flawless level speeds up, costly level slows down */
+    if (getSettings().auto !== false) {
+      if (G.lives >= G.livesAtLevelStart && G.autoDrift < 1.2) {
+        G.autoDrift = Math.round(Math.min(1.2, G.autoDrift + 0.04) * 100) / 100;
+        spawnText(W / 2, PLAY.y + PLAY.h * 0.5, 'warming up ❄', C.gold, 16, 50);
+      } else if (G.lives < G.livesAtLevelStart && G.autoDrift > 0.8) {
+        G.autoDrift = Math.round(Math.max(0.8, G.autoDrift - 0.06) * 100) / 100;
+        spawnText(W / 2, PLAY.y + PLAY.h * 0.5, 'cooling down ❄', C.ice, 16, 50);
+      }
+      saveDrift();
+    }
     if (fxOn('flash')) { G.flash = 0.55; G.flashColor = C.ice; }
     guardedShake(6);
     emit('levelclear', { level: G.level, mode: G.mode, endlessDepth: G.endlessDepth, score: G.score });
@@ -1167,14 +1264,25 @@
           ball.y - ball.r <= p.y + p.h / 2 + 4 &&
           ball.x >= p.x - p.w / 2 - ball.r &&
           ball.x <= p.x + p.w / 2 + ball.r) {
-        bounceOffPaddle(ball, p);
-        G.combo = 0;
-        syncUI();
-        ball.dx = 0;
-        Sound.play('paddle');
-        spawnIceChips(ball.x, p.y - p.h / 2, 0, -1, C.cyan, 7);
-        spawnRing(ball.x, p.y - p.h / 2, C.cyan, 3, 30, 0.3, 2);
-        guardedShake(2);
+        if (G.stickyT > 0 && !ball.stuck) {
+          ball.stuck = true;
+          ball.dx = clamp(ball.x - p.x, -p.w / 2, p.w / 2);
+          ball.trail.length = 0;
+          G.combo = 0;
+          syncUI();
+          Sound.play('paddle');
+          spawnRing(ball.x, p.y - p.h / 2, C.gold, 3, 30, 0.3, 2);
+        } else if (!ball.stuck) {
+          bounceOffPaddle(ball, p);
+          G.combo = 0;
+          syncUI();
+          ball.dx = 0;
+          Sound.play('paddle');
+          spawnIceChips(ball.x, p.y - p.h / 2, 0, -1, C.cyan, 7);
+          spawnRing(ball.x, p.y - p.h / 2, C.cyan, 3, 30, 0.3, 2);
+          guardedShake(2);
+          buzz(8);
+        }
       }
 
       /* power-ups */
@@ -1216,6 +1324,7 @@
     if (fxOn('flash')) { G.flash = Math.max(G.flash, 0.28); G.flashColor = pu.def.color; }
     guardedShake(4);
     Sound.play('powerup');
+    buzz(20);
     emit('powerup', { key: k, x: pu.x, y: pu.y });
 
     if (k === 'multi') {
@@ -1248,6 +1357,19 @@
       G.shield = G.shieldMax;
       Sound.play('shield');
       showBanner('FROST SHIELD', 'One fall absorbed', 1.4);
+    } else if (k === 'laser') {
+      G.laserT = 10;
+      G.laserCd = 0;
+      spawnText(pu.x, pu.y - 34, 'LASER BARRAGE', pu.def.color, 20);
+      addScore(60);
+    } else if (k === 'sticky') {
+      G.stickyT = 14;
+      spawnText(pu.x, pu.y - 34, 'STICKY FROST', pu.def.color, 20);
+      addScore(60);
+    } else if (k === 'slow') {
+      G.slowT = 8;
+      spawnText(pu.x, pu.y - 34, 'GLACIER TIME', pu.def.color, 20);
+      addScore(60);
     }
     syncUI();
   }
@@ -1291,6 +1413,10 @@
 
     if (playing) {
       if (G.autoplay) autoPaddle(dt);
+      if (G.boss && G.boss.alive) {
+        const b = G.boss;
+        b.x = clamp(b.baseX + Math.sin(G.time * (0.5 + G.level * 0.04)) * (PLAY.w * 0.28), PLAY.x + 8, PLAY.right - 8 - b.w);
+      }
       G.paddle.update(dt, input);
       G.powerups.forEach(function (p) {
         if (!p.dead) p.update(dt, G.paddle);
@@ -1321,6 +1447,17 @@
 
     /* power-up timers */
     if (G.shield > 0) G.shield = Math.max(0, G.shield - dt);
+    if (G.laserT > 0) G.laserT = Math.max(0, G.laserT - dt);
+    if (G.stickyT > 0) G.stickyT = Math.max(0, G.stickyT - dt);
+    if (G.slowT > 0) {
+      G.slowT = Math.max(0, G.slowT - dt);
+      if (G.slowT <= 0) {
+        G.balls.forEach(function (b) {
+          if (b.slowed) { if (!b.stuck) b.setSpeed(b.baseSpeed); b.slowed = false; }
+        });
+      }
+    }
+    pollGamepad(dt);
 
     for (let i = 0; i < G.bricks.length; i++) {
       const b = G.bricks[i];
@@ -1392,6 +1529,42 @@
         });
       }
     });
+
+    /* glacier-time: keep live balls slowed while active */
+    if (G.slowT > 0) {
+      G.balls.forEach(function (b) {
+        if (!b.stuck && !b.slowed) { b.setSpeed(b.baseSpeed * 0.6); b.slowed = true; }
+      });
+    }
+
+    /* laser barrage: twin bolts from the paddle tips */
+    if (G.laserT > 0) {
+      G.laserCd -= dt;
+      if (G.laserCd <= 0) {
+        G.laserCd = 0.24;
+        [-1, 1].forEach(function (s) {
+          G.bolts.push({ x: G.paddle.x + s * (G.paddle.w / 2 - 6), y: G.paddle.y - 12, dead: false });
+        });
+        Sound.play('bounce');
+      }
+    }
+    for (let bi = G.bolts.length - 1; bi >= 0; bi--) {
+      const bolt = G.bolts[bi];
+      bolt.y -= 760 * dt;
+      if (bolt.y < PLAY.y) { bolt.dead = true; }
+      else {
+        for (let i = 0; i < G.bricks.length; i++) {
+          const b = G.bricks[i];
+          if (!b.alive) continue;
+          const n = circleVsRect(bolt.x, bolt.y, 5, b);
+          if (!n) continue;
+          hitBrick(b, { x: bolt.x, y: bolt.y, r: 6, hitFlash: 0 }, n);
+          bolt.dead = true;
+          break;
+        }
+      }
+      if (bolt.dead) G.bolts.splice(bi, 1);
+    }
 
     /* did any ball slip past the paddle? */
     const fallen = G.balls.filter(function (b) { return b.dead; });
@@ -1976,6 +2149,26 @@
       ctx.lineTo(p.x + hw, p.y + hh + 4);
       ctx.stroke();
     }
+    /* sticky + laser indicators */
+    if (G.stickyT > 0) {
+      ctx.fillStyle = rgba(C.gold, 0.7 + Math.sin(t * 6) * 0.2);
+      for (let i = -2; i <= 2; i++) {
+        ctx.beginPath(); ctx.arc(p.x + i * (p.w / 5.4), p.y - hh - 4, 2, 0, TAU); ctx.fill();
+      }
+    }
+    if (G.laserT > 0) {
+      ctx.fillStyle = 'rgba(255,140,140,0.9)';
+      [-hw + 6, hw - 6].forEach(function (ox) {
+        ctx.fillRect(p.x + ox - 2, p.y - hh - 12, 4, 8);
+      });
+    }
+    if (G.slowT > 0) {
+      ctx.strokeStyle = rgba(C.violet, 0.6);
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash([4, 5]);
+      ctx.beginPath(); ctx.arc(p.x, p.y, hw + 8, 0, TAU); ctx.stroke();
+      ctx.setLineDash([]);
+    }
 
     /* frost shield: an active ice ward that will absorb one fall */
     if (G.shield > 0) {
@@ -2066,6 +2259,17 @@
     /* specular */
     ctx.fillStyle = 'rgba(255,255,255,0.95)';
     ctx.beginPath(); ctx.arc(b.x - b.r * 0.34, b.y - b.r * 0.4, b.r * 0.22, 0, TAU); ctx.fill();
+  }
+
+  /* --- laser bolts --------------------------------------------------------- */
+  function drawBolts() {
+    G.bolts.forEach(function (b) {
+      drawGlow(b.x, b.y, 22, [255, 160, 160], 0.4);
+      ctx.fillStyle = 'rgba(255,240,240,0.95)';
+      ctx.fillRect(b.x - 2, b.y - 9, 4, 18);
+      ctx.fillStyle = 'rgba(255,120,120,0.9)';
+      ctx.fillRect(b.x - 3.5, b.y - 4, 7, 4);
+    });
   }
 
   /* --- power-ups ----------------------------------------------------------- */
@@ -2261,6 +2465,26 @@
     ctx.textAlign = 'left';
   }
 
+  /* --- boss core HP bar ---------------------------------------------------- */
+  function drawBossBar() {
+    const b = G.boss;
+    if (!b || !b.alive || (G.state !== 'play' && G.state !== 'serve')) return;
+    const k = clamp(b.hp / b.maxHp, 0, 1);
+    const bw = 300, bx = W / 2 - bw / 2, by = 6;
+    ctx.fillStyle = 'rgba(8,20,36,0.7)';
+    ctx.fillRect(bx - 2, by - 2, bw + 4, 14);
+    const grd = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+    grd.addColorStop(0, '#c084fc');
+    grd.addColorStop(1, '#ff6b8b');
+    ctx.fillStyle = grd;
+    ctx.fillRect(bx, by, bw * k, 10);
+    ctx.font = '800 10px "Segoe UI",system-ui,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(230,220,255,0.9)';
+    ctx.fillText('❄ FROST CORE  ' + b.hp + '/' + b.maxHp, W / 2, by + 24);
+    ctx.textAlign = 'left';
+  }
+
   /* --- prompts ------------------------------------------------------------- */
   function drawPrompts() {
     if (G.state !== 'serve') return;
@@ -2335,6 +2559,7 @@
     G.bricks.forEach(drawBrick);
     G.powerups.forEach(drawPowerUp);
     drawPaddle();
+    drawBolts();
     G.balls.forEach(drawBall);
     drawEffects();
     drawPrompts();
@@ -2343,6 +2568,7 @@
     ctx.restore();
 
     drawShieldField();
+    drawBossBar();
 
     /* full-screen flash */
     if (G.flash > 0.01 && fxOn('flash')) {
@@ -2356,6 +2582,35 @@
   /* ==========================================================================
    * 08 · INPUT
    * ======================================================================== */
+
+  /* Gamepad: left stick / d-pad moves, A confirms & launches, Start pauses.
+     Auto-detected; keyboard and touch keep working alongside. */
+  const padPrev = { a: false, start: false };
+  function pollGamepad(dt) {
+    try {
+      const pads = (navigator.getGamepads && navigator.getGamepads()) || [];
+      let gp = null;
+      for (let i = 0; i < pads.length; i++) { if (pads[i] && pads[i].connected) { gp = pads[i]; break; } }
+      if (!gp) return;
+      let ax = 0;
+      if (gp.axes && Math.abs(gp.axes[0]) > 0.25) ax = clamp(gp.axes[0], -1, 1);
+      if (gp.buttons[14] && gp.buttons[14].pressed) ax = -1;
+      if (gp.buttons[15] && gp.buttons[15].pressed) ax = 1;
+      const playing = G.state === 'play' || G.state === 'serve';
+      if (playing && ax !== 0) {
+        input.pointerActive = false;
+        input.axis = ax;
+        G.paddle.x = clamp(G.paddle.x + ax * 760 * dt, PLAY.x + G.paddle.w / 2, PLAY.right - G.paddle.w / 2);
+      } else if (!input.left && !input.right) {
+        input.axis = 0;
+      }
+      const a = !!(gp.buttons[0] && gp.buttons[0].pressed);
+      const start = !!(gp.buttons[9] && gp.buttons[9].pressed);
+      if (a && !padPrev.a) { Sound.unlock(); primaryAction(); }
+      if (start && !padPrev.start) togglePause();
+      padPrev.a = a; padPrev.start = start;
+    } catch (e) { /* no gamepad API */ }
+  }
 
   const input = {
     left: false, right: false, axis: 0,
@@ -2474,6 +2729,14 @@
       case 'serve':
         launchBalls();
         break;
+      case 'play': {
+        const stuck = G.balls.filter(function (b) { return b.stuck; });
+        if (stuck.length) {
+          stuck.forEach(function (b) { b.launch(); });
+          Sound.play('launch');
+        }
+        break;
+      }
       default:
         break;
     }
@@ -2659,6 +2922,8 @@
   setState = function (s) {
     _setState(s);
     if (s === 'gameover' || s === 'victory') fillEndScreen();
+    if (s === 'victory') buzz([40, 60, 40]);
+    if (s === 'gameover') buzz(120);
     emit('state', { state: s, level: G.level, score: G.score, mode: G.mode });
   };
 
@@ -2707,6 +2972,7 @@
     muted: function () { return Sound.isMuted(); },
     setVolume: function (v) { Sound.setVolume(v); },
     getVolume: function () { return Sound.getVolume(); },
+    music: function (on) { if (on) Sound.musicStart(); else Sound.musicStop(); },
     getSettings: function () { return getSettings(); },
     start: function (opts) { startGame(opts); },
     startMode: function (mode, extra) {
@@ -2760,6 +3026,7 @@
 
   resize();
   makeSnow();
+  loadDrift();
   buildLevel(1);
   G.balls = [];
   syncUI();

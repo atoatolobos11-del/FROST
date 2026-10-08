@@ -314,13 +314,32 @@ function renderBoard() {
   const rows = FrostShared.getBoard(boardGame);
   if (!rows.length) {
     boardList.innerHTML = '<li class="empty">No scores yet — finish a run to post one.</li>';
-    return;
+  } else {
+    boardList.innerHTML = rows.map((e, i) =>
+      '<li><span class="rank">' + (i + 1) + '</span><span class="who">' + esc(e.n) +
+      (e.m ? ' · ' + esc(e.m) : '') + '</span><span class="pts">' +
+      Number(e.s).toLocaleString() + '</span><span class="when">' + esc(e.d || '') + '</span></li>'
+    ).join('');
   }
-  boardList.innerHTML = rows.map((e, i) =>
-    '<li><span class="rank">' + (i + 1) + '</span><span class="who">' + esc(e.n) +
-    (e.m ? ' · ' + esc(e.m) : '') + '</span><span class="pts">' +
-    Number(e.s).toLocaleString() + '</span><span class="when">' + esc(e.d || '') + '</span></li>'
-  ).join('');
+  renderRemoteBoard();
+}
+async function renderRemoteBoard() {
+  if (!FrostShared.REMOTE_BOARD_URL) return;
+  const want = boardGame;
+  try {
+    const rows = await FrostShared.fetchRemote(boardGame);
+    if (!rows || !boardList || want !== boardGame) return;
+    const head = document.createElement('li');
+    head.className = 'empty';
+    head.textContent = '🌐 Global top';
+    boardList.appendChild(head);
+    rows.forEach((e, i) => {
+      const li = document.createElement('li');
+      li.innerHTML = '<span class="rank">' + (i + 1) + '</span><span class="who">' + esc(e.n || '?') +
+        '</span><span class="pts">' + Number(e.s || 0).toLocaleString() + '</span><span class="when">' + esc(e.d || '') + '</span>';
+      boardList.appendChild(li);
+    });
+  } catch (e) { /* offline — local board stands */ }
 }
 const btnBoard = document.getElementById('btnBoard');
 if (btnBoard) btnBoard.addEventListener('click', () => {
@@ -355,6 +374,8 @@ function renderSettingsPanel() {
   const sh = document.getElementById('setShake'); if (sh) sh.checked = !!s.shake;
   const pa = document.getElementById('setParticles'); if (pa) pa.checked = !!s.particles;
   const fl = document.getElementById('setFlash'); if (fl) fl.checked = !!s.flash;
+  const vi = document.getElementById('setVibrate'); if (vi) vi.checked = !!s.vibrate;
+  const mu = document.getElementById('setMusic'); if (mu) mu.checked = !!s.music;
 }
 if (btnSettings) btnSettings.addEventListener('click', () => {
   renderSettingsPanel();
@@ -377,12 +398,22 @@ if (setVolume) setVolume.addEventListener('input', () => {
   const vv = document.getElementById('setVolumeVal');
   if (vv) vv.textContent = Math.round(parseFloat(setVolume.value) * 100) + '%';
 });
-[['setShake', 'shake'], ['setParticles', 'particles'], ['setFlash', 'flash']].forEach(([id, key]) => {
+[['setShake', 'shake'], ['setParticles', 'particles'], ['setFlash', 'flash'], ['setVibrate', 'vibrate']].forEach(([id, key]) => {
   const el = document.getElementById(id);
   if (el) el.addEventListener('change', () => {
     FrostShared.saveSettings({ [key]: el.checked });
   });
 });
+const setMusic = document.getElementById('setMusic');
+if (setMusic) {
+  const s0 = FrostShared.getSettings();
+  setMusic.checked = !!s0.music;
+  setMusic.addEventListener('change', () => {
+    FrostShared.saveSettings({ music: setMusic.checked });
+    if (setMusic.checked) FrostShared.musicStart();
+    else FrostShared.musicStop();
+  });
+}
 
 document.addEventListener('fullscreenchange', () => {
   fullscreen = !!document.fullscreenElement;
@@ -405,6 +436,10 @@ function boot() {
   const unlock = () => FrostShared.unlockAudio();
   window.addEventListener('pointerdown', unlock, { once: true });
   window.addEventListener('keydown', unlock, { once: true });
+  /* Generative music starts on first gesture too (if enabled). */
+  const startMusic = () => FrostShared.musicStart();
+  window.addEventListener('pointerdown', startMusic, { once: true });
+  window.addEventListener('keydown', startMusic, { once: true });
   const search = document.getElementById('arcadeSearch');
   if (search) search.addEventListener('input', () => { arcadeQuery = search.value || ''; renderSelector(); });
   syncMuteIcon();

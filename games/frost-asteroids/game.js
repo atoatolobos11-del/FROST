@@ -117,18 +117,28 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
   }
 
   let lastTs = 0;
+  let padPrev = null;
   function loop(ts) { if (!running) return;
     if (!ts) ts = performance.now();
     const dt = lastTs ? Math.min((ts - lastTs) / 1000, 1 / 20) : 1 / 60;
     lastTs = ts;
-    update(dt); render(); animationId = requestAnimationFrame(loop); }
+    const pad = shared.pollPad(padPrev);
+    padPrev = pad._prev || padPrev;
+    if (pad._edgeStart && (state === 'playing' || state === 'paused')) {
+      state = state === 'playing' ? 'paused' : 'playing';
+    }
+    if (pad._edgeB && state === 'playing') fireMissile();
+    update(dt, pad); render(); animationId = requestAnimationFrame(loop); }
 
-  function update(dt) {
+  function update(dt, pad) {
     if (state !== 'playing') return;
+    const padL = pad && pad.active && pad.axis < -0.3;
+    const padR = pad && pad.active && pad.axis > 0.3;
+    const padFire = pad && pad.active && pad.a;
 
     // Ship controls
-    if (keys.ArrowLeft || keys.KeyA || touchMove.left) ship.angle -= 3.5 * dt;
-    if (keys.ArrowRight || keys.KeyD || touchMove.right) ship.angle += 3.5 * dt;
+    if (keys.ArrowLeft || keys.KeyA || touchMove.left || padL) ship.angle -= 3.5 * dt;
+    if (keys.ArrowRight || keys.KeyD || touchMove.right || padR) ship.angle += 3.5 * dt;
     if (keys.ArrowUp || keys.KeyW || touchMove.thrust) {
       const a = ship.angle; ship.vx += Math.cos(a) * 280 * dt; ship.vy += Math.sin(a) * 280 * dt;
       shared.spawnParticles({ x: ship.x - Math.cos(a)*16, y: ship.y - Math.sin(a)*16, count: 2, color: C.ice2, speed: 30, life: 0.15, size: 2 });
@@ -145,7 +155,7 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
       }
       shoot();
     }
-    if (keys.Space || touchMove.fire) shoot();
+    if (keys.Space || touchMove.fire || padFire) shoot();
 
     ship.vx *= 0.985; ship.vy *= 0.985;
     ship.x += ship.vx * dt; ship.y += ship.vy * dt; wrap(ship);
@@ -381,6 +391,7 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
     if (score > highScore) { highScore = score; shared.saveScore('asteroids', highScore); }
     bossActive = false; boss = null; bossBullets = [];
     waveTimer = 3;
+    shared.buzz([40, 60]);
     shared.tone({ f0: 440, f1: 660, f2: 880, f3: 1320, dur: 1, vol: 0.4, type: 'sine' });
     shared.spawnParticles({ x: W/2, y: H/2, count: 60, color: C.gold, speed: 300, life: 1.5, size: 6, gravity: 50 });
     kick(20); flash(1);
@@ -461,6 +472,7 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
 
   function hitShip() {
     lives--; shipInvuln = 2; ship.blink = 2; kick(12); flash(0.5);
+    shared.buzz(60);
     shared.tone({ f0: 100, f1: 60, dur: 0.4, vol: 0.4, type: 'sawtooth' });
     shared.spawnParticles({ x: ship.x, y: ship.y, count: 30, color: C.red, speed: 250, life: 0.8, size: 5 });
     if (lives <= 0) { state = 'gameover'; shared.recordBoard('asteroids', score); shared.tone({ f0: 120, f1: 50, dur: 0.8, vol: 0.5, type: 'sawtooth' }); }

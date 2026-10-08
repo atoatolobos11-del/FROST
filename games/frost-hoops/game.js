@@ -46,6 +46,7 @@ let flightMinY = 0;
 let resolved = true;
 let hasShot = false; // clock starts on first shot, not on boot
 let lastError = null; // shown on-canvas if a frame ever throws
+let padPrev = null;
 
 function rimRx() { return 72 / diffMult(); }
 function swaySpeed() { return (0.5 + score * 0.05) * diffMult(); }
@@ -169,6 +170,7 @@ function onBasket() {
   popups.push({ x: hoopX, y: hoopY() + 60, str: streak >= 3 ? '+' + 1 + '  🔥x' + streak : '+1', life: 0, max: 1 });
   netAnim = 0.6;
   swishSnd(); cheer();
+  shared.buzz(25);
   shared.spawnParticles({ x: hoopX, y: hoopY(), count: 22, color: C.gold, speed: 220, life: 0.7, size: 4 });
   kick(4);
   if (score > best) { best = score; shared.saveScore('hoops', best); }
@@ -600,10 +602,13 @@ function resize() {
 
 function loop(ts) {
   if (!running) return;
+  if (!ts) ts = performance.now();
+  const dt = lastTs ? Math.min((ts - lastTs) / 1000, 1 / 20) : 1 / 60;
+  lastTs = ts;
   try {
-    if (!ts) ts = performance.now();
-    const dt = lastTs ? Math.min((ts - lastTs) / 1000, 1 / 20) : 1 / 60;
-    lastTs = ts;
+    const pad = shared.pollPad(padPrev);
+    padPrev = pad._prev || padPrev;
+    if (pad._edgeA && (state === 'menu' || state === 'gameover')) { reset(); state = 'ready'; }
     update(dt);
     render();
   } catch (err) {
