@@ -42,17 +42,11 @@ function diffMult() { try { return (shared && shared.difficultyMult) ? shared.di
 function kick(v) { if (shared && shared.fxOn && !shared.fxOn('shake')) return; shake = Math.max(shake, v); }
 function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
 
-function newHoopTarget() {
-  return { x: 480 + Math.random() * 380, y: 110 + Math.random() * 190 };
-}
-
 function reset(newBest) {
   const dm = diffMult();
   hoop = {
-    x: 700, y: 180,
+    x: W / 2, y: 170,
     rimHalf: 34 / dm,
-    target: newHoopTarget(),
-    speed: 90 * dm,
   };
   spawnBall();
   score = 0; streak = 0; bestStreak = 0; makes = 0; attempts = 0;
@@ -115,7 +109,6 @@ function onBasket() {
   shared.spawnParticles({ x: hoop.x, y: hoop.y, count: 22, color: C.gold, speed: 220, life: 0.7, size: 4 });
   kick(4);
   if (score > best) { best = score; shared.saveScore('hoops', best); }
-  hoop.target = newHoopTarget();
 }
 
 /* ---- physics ---- */
@@ -136,16 +129,6 @@ function collideCircle(ball, px, py, pr, rest) {
 
 function update(dt) {
   if (state !== 'flying' && state !== 'aiming' && state !== 'ready') return;
-
-  /* hoop drift */
-  const dx = hoop.target.x - hoop.x, dy = hoop.target.y - hoop.y;
-  const d = Math.hypot(dx, dy);
-  if (d < 8) hoop.target = newHoopTarget();
-  else {
-    const step = Math.min(d, hoop.speed * dt);
-    hoop.x += dx / d * step;
-    hoop.y += dy / d * step;
-  }
 
   /* popups */
   for (let i = popups.length - 1; i >= 0; i--) {
@@ -253,10 +236,10 @@ function drawBallShape() {
 
 function drawHoop(t) {
   const hx = hoop.x, hy = hoop.y, rh = hoop.rimHalf;
-  /* arm to the wall */
+  /* ceiling mount */
   ctx.strokeStyle = 'rgba(120,180,220,0.5)';
   ctx.lineWidth = 6;
-  ctx.beginPath(); ctx.moveTo(hx + rh + 12, hy - 80); ctx.lineTo(W, hy - 80); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(hx + rh + 6, hy - 86); ctx.lineTo(hx + rh + 6, 0); ctx.stroke();
   /* backboard */
   ctx.fillStyle = 'rgba(150,220,255,0.25)';
   ctx.fillRect(hx + rh, hy - 86, 12, 86);
