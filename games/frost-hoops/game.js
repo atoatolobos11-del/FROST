@@ -440,7 +440,7 @@ function drawHoopFront(t) {
   ctx.strokeStyle = steel;
   ctx.lineWidth = 7;
   ctx.beginPath();
-  ctx.ellipse(hx, hy, rx, 13, 0, Math.PI * 2);
+  ctx.ellipse(hx, hy, rx, 13, 0, 0, Math.PI * 2);
   ctx.stroke();
   ctx.strokeStyle = 'rgba(255,205,150,0.85)';
   ctx.lineWidth = 2.2;
