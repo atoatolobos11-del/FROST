@@ -1381,6 +1381,16 @@
       moveBall(b, dt);
       b.trail.push({ x: b.x, y: b.y });
       if (b.trail.length > 16) b.trail.shift();
+      /* fireball embers */
+      if (fxOn('particles') && Math.random() < 0.55 && G.particles.length < MAX_PARTICLES) {
+        G.particles.push({
+          kind: 'spark',
+          x: b.x + rand(6, -6), y: b.y + rand(6, -6),
+          vx: rand(50, -50) - b.vx * 0.06, vy: rand(-60, -170),
+          life: 0, max: rand(0.5, 0.25),
+          color: pick([[255, 122, 40], [255, 170, 80], [255, 70, 30], [255, 220, 150]]),
+        });
+      }
     });
 
     /* did any ball slip past the paddle? */
@@ -2007,16 +2017,18 @@
     }
   }
 
-  /* --- ball ---------------------------------------------------------------- */
+  /* --- ball (fireball) ----------------------------------------------------- */
+  const FIRE = [255, 122, 40];
+  const FIRE_HOT = [255, 196, 110];
   function drawBall(b) {
-    /* frost trail */
+    /* flame trail */
     if (b.trail.length > 1) {
       ctx.globalCompositeOperation = 'lighter';
       for (let i = 0; i < b.trail.length; i++) {
         const k = i / b.trail.length;
-        const a = Math.pow(k, 1.7) * 0.42;
-        const r = b.r * (0.28 + k * 0.78);
-        ctx.fillStyle = rgba(C.cyan, a);
+        const a = Math.pow(k, 1.7) * 0.45;
+        const r = b.r * (0.28 + k * 0.85);
+        ctx.fillStyle = rgba(k > 0.55 ? FIRE_HOT : FIRE, a);
         ctx.beginPath();
         ctx.arc(b.trail[i].x, b.trail[i].y, r, 0, TAU);
         ctx.fill();
@@ -2024,24 +2036,24 @@
       ctx.globalCompositeOperation = 'source-over';
     }
 
-    drawGlow(b.x, b.y, b.r * 6.2, C.cyan, 0.34);
+    drawGlow(b.x, b.y, b.r * 6.8, FIRE, 0.38);
     if (b.hitFlash > 0) drawGlow(b.x, b.y, b.r * 9, C.white, b.hitFlash * 0.4);
 
-    /* core sphere */
+    /* burning core */
     const grd = ctx.createRadialGradient(b.x - b.r * 0.35, b.y - b.r * 0.4, b.r * 0.1, b.x, b.y, b.r);
-    grd.addColorStop(0, '#ffffff');
-    grd.addColorStop(0.34, '#e2f8ff');
-    grd.addColorStop(0.72, '#7fd4ff');
-    grd.addColorStop(1, '#2f8fd8');
+    grd.addColorStop(0, '#fffbe8');
+    grd.addColorStop(0.34, '#ffe9a8');
+    grd.addColorStop(0.72, '#ff9a3c');
+    grd.addColorStop(1, '#c22e12');
     ctx.fillStyle = grd;
     ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, TAU); ctx.fill();
 
-    /* faceted shell */
+    /* flame licks */
     ctx.save();
     ctx.translate(b.x, b.y);
     ctx.rotate(b.spin);
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255,230,170,0.65)';
+    ctx.lineWidth = 1.2;
     ctx.beginPath();
     for (let i = 0; i < 3; i++) {
       const a = (Math.PI / 3) * i;

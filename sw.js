@@ -1,5 +1,5 @@
 /* Frost Breakout service worker — offline-first cache */
-const CACHE = 'frost-breakout-v1';
+const CACHE = 'frost-breakout-v2';
 const CORE = [
   './',
   './index.html',
@@ -12,7 +12,8 @@ const CORE = [
   './games/shell.html',
   './games/shared/arcade.css',
   './games/shared/frost-shared.js',
-  './games/shared/gameshell.js'
+  './games/shared/gameshell.js',
+  './games/frost-hoops/game.js'
 ];
 self.addEventListener('install', (e) => {
   e.waitUntil(

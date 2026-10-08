@@ -59,7 +59,7 @@ On phones and tablets an on-screen control bar appears automatically.
 
 ## 🕹️ Frost Arcade (`games/shell.html`)
 
-The same project also ships a mini arcade with **4 extra games** sharing one
+The same project also ships a mini arcade with **5 extra games** sharing one
 audio/particle/storage engine (`games/shared/`):
 
 | Game | Controls |
@@ -68,6 +68,7 @@ audio/particle/storage engine (`games/shared/`):
 | 🐍 Frost Snake | arrows / swipe, `Space` or tap to start |
 | ☄️ Frost Asteroids | arrows/`WASD` + `Space`, or touch to steer + autofire |
 | 🎱 Frost Pinball | `←`/`→` or `A`/`D` flippers, `Space` plunger, touch halves |
+| 🏀 Frost Hoops | drag back & release to shoot, `Space` start/pause |
 
 Open `games/shell.html` (or the 🏪 button in-game) for the selector; the 🏠
 button returns to it at any time.
@@ -94,7 +95,7 @@ button returns to it at any time.
 - Parallax snow, drifting background crystals, arena icicles that shimmer,
   pulsing frost corners and cold floor mist
 - Frost-shaded paddle with travelling energy line, end-cap glow and frost spikes
-- Ice sphere with faceted shell, specular highlight and additive frost trail
+- Fireball with burning core, flame licks, ember sparks and additive fire trail
 - Translucent blocks with glowing edges, animated sheen sweep and hit flashes
 - Shatter bursts: crystal shards, sparks, mist, expanding rings, glints,
   floating score text
@@ -127,7 +128,8 @@ frost-breakout/
 │   ├── frost-pong/         # 2P/AI pong module
 │   ├── frost-snake/        # snake module
 │   ├── frost-asteroids/    # asteroids module
-│   └── frost-pinball/      # pinball module
+│   ├── frost-pinball/      # pinball module
+│   └── frost-hoops/        # flick basketball shootout
 ├── tools/
 │   ├── serve.mjs            # dependency-free local static server
 │   └── generate-sounds.mjs  # dependency-free WAV generator
