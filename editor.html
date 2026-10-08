@@ -20,8 +20,8 @@ select,input[type=text],input[type=number]{background:#0b2540;color:#e8faff;bord
 .palette{display:flex;gap:8px;flex-wrap:wrap}
 .pal{padding:8px 12px;border-radius:999px;border:2px solid transparent;background:rgba(11,32,58,.7);color:#e8faff;font:inherit;font-weight:700;cursor:pointer}
 .pal.active{border-color:#57e6ff}
-.grid{display:grid;gap:4px;user-select:none;touch-action:none;background:rgba(2,10,22,.5);padding:10px;border-radius:12px;border:1px solid var(--stroke)}
-.cell{aspect-ratio:2.6/1;border-radius:5px;border:1px solid rgba(140,210,255,.22);background:rgba(20,40,70,.35);cursor:pointer}
+.grid{display:grid;gap:4px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none;background:rgba(2,10,22,.5);padding:10px;border-radius:12px;border:1px solid var(--stroke)}
+.cell{-webkit-tap-highlight-color:transparent;aspect-ratio:2.6/1;border-radius:5px;border:1px solid rgba(140,210,255,.22);background:rgba(20,40,70,.35);cursor:pointer}
 .cell.glacier{background:linear-gradient(180deg,#baeeff,#226caa)}
 .cell.frost{background:linear-gradient(180deg,#8ad0ff,#1e56a0)}
 .cell.pack{background:linear-gradient(180deg,#78acfa,#183e8a)}
@@ -64,42 +64,64 @@ small.hint{opacity:.65}
       <button class="ghost" id="edDownload">Download file</button>
     </div>
     <textarea id="edJson" placeholder='Exported JSON appears here. Paste JSON then hit "Import JSON".'></textarea>
+    <p class="daily-line" id="edStatus" aria-live="polite" style="margin:8px 0 0;font-size:12px;color:#9fe6ff"></p>
     <small class="hint">Saved to <code>localStorage → frost-breakout:custom</code>. Play via Custom mode on the main menu, or <code>index.html?play=custom</code>. At least 1 breakable block is required.</small>
   </div>
 </main>
 <script>
 (function(){
   const $=id=>document.getElementById(id);
-  const grid=$('edGrid'), pal=$('edPal');
-  let tool='glacier', painting=false, erase=false;
-  function dims(){return{cols:parseInt($('edCols').value,10),rows:parseInt($('edRows').value,10)};}
+  const grid=$('edGrid'), pal=$('edPal'), status=$('edStatus');
+  const TYPES=['glacier','frost','pack','ember','bedrock'];
+  let tool='glacier', painting=false;
+  let curCols=13, curRows=9;
+
+  function say(msg){ if(status) status.textContent=msg; }
+  function dims(){return{cols:curCols,rows:curRows};}
+  function syncSelects(){
+    $('edCols').value=String(curCols);
+    $('edRows').value=String(curRows);
+  }
   function build(){
-    const{cols,rows}=dims();
-    grid.style.gridTemplateColumns='repeat('+cols+',1fr)';
+    grid.style.gridTemplateColumns='repeat('+curCols+',1fr)';
     grid.innerHTML='';
-    for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    for(let r=0;r<curRows;r++)for(let c=0;c<curCols;c++){
       const d=document.createElement('div');
       d.className='cell';d.dataset.c=c;d.dataset.r=r;
       d.addEventListener('pointerdown',e=>{e.preventDefault();painting=true;paint(d,e);});
-      d.addEventListener('pointerenter',e=>{if(painting)paint(d,e);});
       grid.appendChild(d);
     }
   }
+  /* grid-level move + elementFromPoint works for mouse AND touch
+     (touch implicitly captures the pointer, so per-cell enter never fires) */
+  grid.addEventListener('pointermove',e=>{
+    if(!painting)return;
+    e.preventDefault();
+    const el=document.elementFromPoint(e.clientX,e.clientY);
+    const cell=el&&el.closest?el.closest('.cell'):null;
+    if(cell&&grid.contains(cell))paint(cell,e);
+  });
   function paint(d,e){
-    const t=(e&&e.shiftKey)?'':tool;
+    const t=(e&&e.shiftKey)?'':tool; // shift+paint = quick erase
     d.className='cell'+(t?' '+t:'');
   }
   window.addEventListener('pointerup',()=>painting=false);
+  window.addEventListener('pointercancel',()=>painting=false);
+  grid.addEventListener('contextmenu',e=>e.preventDefault());
   pal.addEventListener('click',e=>{
     const b=e.target.closest('.pal');if(!b)return;
     tool=b.dataset.t;
     pal.querySelectorAll('.pal').forEach(x=>x.classList.remove('active'));
     b.classList.add('active');
+    say('Brush: '+(tool||'eraser'));
   });
-  $('edCols').addEventListener('change',build);
-  $('edRows').addEventListener('change',build);
-  $('edFill').addEventListener('click',()=>grid.querySelectorAll('.cell').forEach(d=>d.className='cell '+(tool||'glacier')));
-  $('edClear').addEventListener('click',()=>grid.querySelectorAll('.cell').forEach(d=>d.className='cell'));
+  $('edCols').addEventListener('change',e=>{curCols=parseInt(e.target.value,10)||13;build();});
+  $('edRows').addEventListener('change',e=>{curRows=parseInt(e.target.value,10)||9;build();});
+  $('edFill').addEventListener('click',()=>{
+    grid.querySelectorAll('.cell').forEach(d=>d.className='cell '+(tool||'glacier'));
+    say('Filled with '+(tool||'glacier'));
+  });
+  $('edClear').addEventListener('click',()=>{grid.querySelectorAll('.cell').forEach(d=>d.className='cell');say('Cleared');});
   $('edSample').addEventListener('click',()=>{
     const{cols,rows}=dims();
     grid.querySelectorAll('.cell').forEach(d=>{
@@ -107,7 +129,19 @@ small.hint{opacity:.65}
       const on=Math.abs(c-(cols-1)/2)<=r+0.4;
       d.className='cell'+(on?' frost':'');
     });
+    say('Pyramid sample painted');
   });
+  function cleanCells(cells,cols,rows){
+    const out=[];
+    (cells||[]).forEach(function(cell){
+      const c=+cell.c, r=+cell.r, t=String(cell.t||'');
+      if(!Number.isFinite(c)||!Number.isFinite(r))return;
+      if(c<0||r<0||c>=cols||r>=rows)return;
+      if(TYPES.indexOf(t)<0)return;
+      out.push({c:c,r:r,t:t});
+    });
+    return out;
+  }
   function collect(){
     const{cols,rows}=dims();
     const cells=[];
@@ -115,42 +149,63 @@ small.hint{opacity:.65}
       const m=d.className.match(/glacier|frost|pack|ember|bedrock/);
       if(m)cells.push({c:+d.dataset.c,r:+d.dataset.r,t:m[0]});
     });
-    return{name:($('edName').value||'CUSTOM').toUpperCase(),cols,rows,speed:parseInt($('edSpeed').value,10)||360,cells};
+    let speed=parseInt($('edSpeed').value,10);
+    if(!Number.isFinite(speed))speed=360;
+    speed=Math.min(600,Math.max(200,speed));
+    return{name:(($('edName').value||'CUSTOM').toUpperCase()).slice(0,24),cols,rows,speed,cells};
   }
   function applyData(o){
-    if(!o||!o.cols||!o.rows||!Array.isArray(o.cells))return alert('Bad JSON');
-    $('edName').value=o.name||'CUSTOM';$('edCols').value=String(o.cols);$('edRows').value=String(o.rows);$('edSpeed').value=o.speed||360;
-    build();
-    const key={};o.cells.forEach(c=>key[c.c+':'+c.r]=c.t);
+    if(!o||!Array.isArray(o.cells))return alert('Bad JSON: need {cols,rows,cells}');
+    let cols=parseInt(o.cols,10), rows=parseInt(o.rows,10);
+    if(!Number.isFinite(cols)||!Number.isFinite(rows))return alert('Bad JSON: cols/rows must be numbers');
+    cols=Math.min(15,Math.max(5,cols)); rows=Math.min(12,Math.max(3,rows));
+    const cells=cleanCells(o.cells,cols,rows);
+    if(!cells.length)return alert('Bad JSON: no valid blocks for a '+cols+'x'+rows+' grid');
+    curCols=cols; curRows=rows; syncSelects(); build();
+    $('edName').value=String(o.name||'CUSTOM').slice(0,24);
+    $('edSpeed').value=(Number.isFinite(+o.speed)?Math.min(600,Math.max(200,+o.speed)):360);
+    const key={};cells.forEach(c=>key[c.c+':'+c.r]=c.t);
     grid.querySelectorAll('.cell').forEach(d=>{
       const t=key[d.dataset.c+':'+d.dataset.r];
       d.className='cell'+(t?' '+t:'');
     });
+    say('Loaded '+cells.length+' blocks ('+cols+'x'+rows+')');
   }
   function hasBreakable(cells){return cells.some(c=>c.t!=='bedrock');}
   $('edSave').addEventListener('click',()=>{
     const o=collect();
     if(!o.cells.length||!hasBreakable(o.cells))return alert('Add at least 1 breakable block.');
-    localStorage.setItem('frost-breakout:custom',JSON.stringify(o));
-    alert('Saved! Open the game → Custom mode to play.');
+    try{localStorage.setItem('frost-breakout:custom',JSON.stringify(o));}
+    catch(e){return alert('Save failed: storage unavailable');}
+    say('Saved "'+o.name+'" ('+o.cells.length+' blocks). Play it via Custom mode.');
   });
   $('edPlay').addEventListener('click',()=>{
     const o=collect();
     if(!o.cells.length||!hasBreakable(o.cells))return alert('Add at least 1 breakable block.');
-    localStorage.setItem('frost-breakout:custom',JSON.stringify(o));
+    try{localStorage.setItem('frost-breakout:custom',JSON.stringify(o));}
+    catch(e){return alert('Save failed: storage unavailable');}
     location.href='index.html?play=custom';
   });
   $('edLoad').addEventListener('click',()=>{
-    try{const o=JSON.parse(localStorage.getItem('frost-breakout:custom'));if(!o)return alert('Nothing saved yet.');applyData(o);}catch(e){alert('Load failed');}
+    try{
+      const o=JSON.parse(localStorage.getItem('frost-breakout:custom'));
+      if(!o)return alert('Nothing saved yet.');
+      applyData(o);
+    }catch(e){alert('Load failed: '+e.message);}
   });
-  $('edExport').addEventListener('click',()=>{$('edJson').value=JSON.stringify(collect());});
-  $('edImport').addEventListener('click',()=>{try{applyData(JSON.parse($('edJson').value));}catch(e){alert('Invalid JSON');}});
+  $('edExport').addEventListener('click',()=>{$('edJson').value=JSON.stringify(collect());say('Exported to the text box');});
+  $('edImport').addEventListener('click',()=>{
+    try{applyData(JSON.parse($('edJson').value));}
+    catch(e){alert('Invalid JSON: '+e.message);}
+  });
   $('edDownload').addEventListener('click',()=>{
     const blob=new Blob([JSON.stringify(collect(),null,2)],{type:'application/json'});
-    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='frost-level.json';a.click();
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='frost-level.json';
+    document.body.appendChild(a);a.click();a.remove();
     setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+    say('Downloaded frost-level.json');
   });
-  build();
+  syncSelects(); build(); say('Pick a brush, then paint. Drag works with mouse + touch.');
 })();
 </script>
 </body>
