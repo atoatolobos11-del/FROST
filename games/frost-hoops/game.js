@@ -13,7 +13,8 @@ let running = false;
 let lastTs = 0;
 
 const W = 960, H = 540;
-const GRAV = 1700;
+const GRAV = 1500;
+const LAUNCH_BOOST = 1.3; // comfortable flicks still reach the rim
 const BALL_R = 16;
 const FLOOR = H - 30;
 const GAME_TIME = 60;
@@ -44,9 +45,9 @@ let dragTrail = null; // [{x,y,t}] while aiming
 let flightMinY = 0;
 let resolved = true;
 
-function rimRx() { return 56 / diffMult(); }
-function swaySpeed() { return (0.9 + score * 0.07) * diffMult(); }
-function swayAmp() { return Math.min(260, 120 + score * 7); }
+function rimRx() { return 72 / diffMult(); }
+function swaySpeed() { return (0.5 + score * 0.05) * diffMult(); }
+function swayAmp() { return Math.min(220, 110 + score * 8); }
 function hoopY() { return 150; }
 
 function reset() {
@@ -72,6 +73,56 @@ function toGame(e) {
   return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H, t: performance.now() };
 }
 
+/* gentle aim assist: bend the flick toward a makeable arc so mouse
+   shots forgive small direction errors. Preview uses the same math. */
+const ASSIST = 0.65;
+function predictHoopX(tau) {
+  // exact copy of update()'s sway math: hoopX(t) = W/2 + sin(swayT + w*tau) * amp
+  return W / 2 + Math.sin(swayT + swaySpeed() * tau) * swayAmp();
+}
+/* launch pipeline: compress wild flicks into a consistent power band,
+   then bend toward the exact intercept. Preview and release share it. */
+function bandVelocity(raw) {
+  if (!raw) return null;
+  const s = 1100 + Math.min(1, (raw.sp - 450) / 1300) * 400;
+  const rl = Math.hypot(raw.vx, raw.vy) || 1;
+  return assistedVelocity({ vx: raw.vx / rl * s, vy: raw.vy / rl * s, sp: s });
+}
+/* exact intercept: velocity with speed s from (sx,sy) through (tx,ty).
+   Scans flight time for the best fit; null when physically unreachable. */
+function solveIntercept(sx, sy, tx, ty, s) {
+  const dx = tx - sx, dy = ty - sy;
+  let bestT = 0, bestErr = Infinity;
+  for (let T = 0.2; T <= 2.5; T += 0.02) {
+    const ex = dx, ey = dy - 0.5 * GRAV * T * T;
+    const err = Math.abs(Math.hypot(ex, ey) - s * T);
+    if (err < bestErr) { bestErr = err; bestT = T; }
+  }
+  if (bestErr > 40) return null;
+  const T = bestT;
+  return { vx: dx / T, vy: (dy - 0.5 * GRAV * T * T) / T, T: T };
+}
+function assistedVelocity(v) {
+  if (!v) return null;
+  const s = Math.min(v.sp, 2300);
+  // iterate twice: hoop prediction <-> intercept solution converge
+  let T = 0.7, hx = hoopX;
+  for (let k = 0; k < 2; k++) {
+    hx = clamp(predictHoopX(T), 90, W - 90);
+    const sol = solveIntercept(ball.x, ball.y, hx, hoopY() - 6, s);
+    if (!sol) return v; // too weak to reach — honest miss, no fake help
+    T = sol.T;
+  }
+  const sol = solveIntercept(ball.x, ball.y, hx, hoopY() - 6, s);
+  if (!sol) return v;
+  let vx = v.vx * (1 - ASSIST) + sol.vx * ASSIST;
+  let vy = v.vy * (1 - ASSIST) + sol.vy * ASSIST;
+  const sp = Math.hypot(vx, vy);
+  const MAXV = 2300;
+  if (sp > MAXV) { vx = vx / sp * MAXV; vy = vy / sp * MAXV; }
+  return { vx: vx, vy: vy, sp: Math.min(sp, MAXV) };
+}
+
 /* flick velocity from the last ~100ms of the drag */
 function flickVelocity() {
   if (!dragTrail || dragTrail.length < 2) return null;
@@ -82,8 +133,8 @@ function flickVelocity() {
     else break;
   }
   const dt = Math.max(16, last.t - first.t) / 1000;
-  let vx = (last.x - first.x) / dt;
-  let vy = (last.y - first.y) / dt;
+  let vx = (last.x - first.x) / dt * LAUNCH_BOOST;
+  let vy = (last.y - first.y) / dt * LAUNCH_BOOST;
   const sp = Math.hypot(vx, vy);
   const MAXV = 2300;
   if (sp > MAXV) { vx = vx / sp * MAXV; vy = vy / sp * MAXV; }
@@ -182,27 +233,25 @@ function update(dt) {
     }
   });
 
-  /* backboard (front face only) */
+  /* backboard: solid only where it really is (min-axis resolution) */
   const bw = 230, bh = 150;
   const bx0 = hoopX - bw / 2, bx1 = hoopX + bw / 2;
   const by0 = hy - 40 - bh, by1 = hy - 40;
-  if (ball.x + BALL_R > bx0 && ball.x - BALL_R < bx1 && ball.y > by0 && ball.y < by1 + 30) {
-    if (ball.vy < 0 && ball.y > by1 - 6) {
-      // hit the board's lower edge area from below — push down/out
-      ball.vy = Math.abs(ball.vy) * 0.4;
-      ball.y = by1 + BALL_R;
-      thud(true);
-    } else if (ball.vy >= 0 && prevY - BALL_R <= by0) {
-      ball.y = by0 - BALL_R;
-      ball.vy = -Math.abs(ball.vy) * 0.45;
-      ball.vx *= 0.9;
-      thud(true);
-    }
+  const ex0 = bx0 - BALL_R, ex1 = bx1 + BALL_R;
+  const ey0 = by0 - BALL_R, ey1 = by1 + BALL_R;
+  if (ball.x > ex0 && ball.x < ex1 && ball.y > ey0 && ball.y < ey1) {
+    const pl = ball.x - ex0, pr = ex1 - ball.x;
+    const pt = ball.y - ey0, pb = ey1 - ball.y;
+    const m = Math.min(pl, pr, pt, pb);
+    if (m === pb) { ball.y = ey1; if (ball.vy < 0) { ball.vy = -ball.vy * 0.45; thud(true); } }
+    else if (m === pt) { ball.y = ey0; if (ball.vy > 0) { ball.vy = -ball.vy * 0.45; thud(true); } }
+    else if (m === pl) { ball.x = ex0; if (ball.vx > 0) { ball.vx = -ball.vx * 0.5; thud(true); } }
+    else { ball.x = ex1; if (ball.vx < 0) { ball.vx = -ball.vx * 0.5; thud(true); } }
   }
 
-  /* basket: clean downward entry after a real arc */
+  /* basket: clean downward entry through the mouth */
   if (!resolved && ball.vy > 0 && prevY < hy && ball.y >= hy &&
-      Math.abs(ball.x - hoopX) < rx - 8 && flightMinY < hy - 30) {
+      Math.abs(ball.x - hoopX) < rx - 8) {
     onBasket();
   }
 
@@ -215,11 +264,17 @@ function update(dt) {
     else { ball.vy = 0; ball.vx *= (1 - Math.min(1, 3 * dt)); }
   }
 
-  /* resolve flight */
+  /* resolve flight: miss, or new ball after a basket */
   const speed = Math.hypot(ball.vx, ball.vy);
-  if (!resolved && (ball.y > H + 60 || (ball.y + BALL_R >= FLOOR - 1 && speed < 70))) {
+  if (ball.y > H + 60 || (ball.y + BALL_R >= FLOOR - 1 && speed < 70)) {
     ball.settle = (ball.settle || 0) + dt;
-    if (ball.settle > 0.5 || ball.y > H + 60) { ball.settle = 0; onMiss(); }
+    if (ball.settle > 0.5 || ball.y > H + 60) {
+      ball.settle = 0;
+      if (!resolved) onMiss();
+      else spawnBall();
+    }
+  } else {
+    ball.settle = 0;
   }
 
   shake = Math.max(0, shake - dt * 8);
@@ -289,8 +344,10 @@ function drawHoopFront(t) {
 }
 
 function drawAim() {
-  const v = flickVelocity();
-  if (!v || v.sp < 200) return;
+  const raw = flickVelocity();
+  if (!raw || raw.sp < 450) return;
+  const v = bandVelocity(raw);
+  if (!v) return;
   let px = ball.x, py = ball.y, vx = v.vx, vy = v.vy;
   ctx.fillStyle = 'rgba(255,255,255,0.65)';
   for (let i = 0; i < 20; i++) {
@@ -402,9 +459,11 @@ function onPointerMove(e) {
 }
 function onPointerUp() {
   if (state !== 'aiming') { dragTrail = null; return; }
-  const v = flickVelocity();
+  const raw = flickVelocity();
   dragTrail = null;
-  if (!v || v.sp < 350 || v.vy > -120) { state = 'ready'; return; } // too soft — no shot
+  if (!raw || raw.sp < 450 || raw.vy > -100) { state = 'ready'; return; } // too soft — no shot
+  // compress wild flicks into a consistent power band: direction is yours, pace is tamed
+  const v = bandVelocity(raw);
   ball.vx = v.vx; ball.vy = v.vy;
   flightMinY = ball.y;
   resolved = false;
