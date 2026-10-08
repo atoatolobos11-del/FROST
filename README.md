@@ -68,7 +68,7 @@ audio/particle/storage engine (`games/shared/`):
 | 🐍 Frost Snake | arrows / swipe, `Space` or tap to start |
 | ☄️ Frost Asteroids | arrows/`WASD` + `Space`, or touch to steer + autofire |
 | 🎱 Frost Pinball | `←`/`→` or `A`/`D` flippers, `Space` plunger, touch halves |
-| 🏀 Frost Hoops | swipe up fast on the ball, 3 misses end the run |
+| 🏀 Frost Hoops | swipe up fast on the ball, 60s shootout |
 
 Open `games/shell.html` (or the 🏪 button in-game) for the selector; the 🏠
 button returns to it at any time.

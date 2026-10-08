@@ -16,7 +16,7 @@ const W = 960, H = 540;
 const GRAV = 1700;
 const BALL_R = 16;
 const FLOOR = H - 30;
-const MAX_MISS = 3;
+const GAME_TIME = 60;
 
 const C = {
   bg: '#030710', ice: '#e8faff', ice2: '#bae6fd', ice3: '#38bdf8',
@@ -34,7 +34,7 @@ let state = 'menu'; // menu | ready | aiming | flying | paused | gameover
 let pausedFrom = 'ready';
 let ball = null;
 let hoopX = W / 2;
-let score = 0, best = 0, streak = 0, bestStreak = 0, misses = 0;
+let score = 0, best = 0, streak = 0, bestStreak = 0, timeLeft = GAME_TIME;
 let swayT = 0;
 let netAnim = 0;
 let shake = 0;
@@ -50,7 +50,7 @@ function swayAmp() { return Math.min(260, 120 + score * 7); }
 function hoopY() { return 150; }
 
 function reset() {
-  score = 0; streak = 0; bestStreak = 0; misses = 0;
+  score = 0; streak = 0; bestStreak = 0; timeLeft = GAME_TIME;
   swayT = 0; netAnim = 0;
   popups = [];
   spawnBall();
@@ -122,21 +122,24 @@ function onBasket() {
 
 function onMiss() {
   resolved = true;
-  misses++;
   streak = 0;
-  popups.push({ x: ball.x, y: 300, str: misses >= MAX_MISS ? 'MISS — GAME' : 'MISS ' + misses + '/' + MAX_MISS, life: 0, max: 1 });
+  popups.push({ x: ball.x, y: 300, str: 'MISS', life: 0, max: 0.8 });
   shared.tone({ f0: 220, f1: 140, dur: 0.2, vol: 0.2, type: 'square' });
-  if (misses >= MAX_MISS) {
-    state = 'gameover';
-    buzzerSnd();
-  } else {
-    spawnBall();
-  }
+  spawnBall();
 }
 
 /* ---- update ---- */
 function update(dt) {
   if (state !== 'ready' && state !== 'aiming' && state !== 'flying') return;
+
+  /* clock — the run ends at zero */
+  timeLeft -= dt;
+  if (timeLeft <= 0) {
+    timeLeft = 0;
+    state = 'gameover';
+    buzzerSnd();
+    return;
+  }
 
   /* hoop sway */
   swayT += dt * swaySpeed();
@@ -363,16 +366,14 @@ function render() {
     ctx.font = 'bold 18px monospace';
     ctx.fillText('🔥 x' + streak, 20, 84);
   }
-  ctx.textAlign = 'right';
-  ctx.font = 'bold 20px monospace';
-  ctx.fillStyle = misses >= 2 ? C.red : C.ice2;
-  let balls = '';
-  for (let i = 0; i < MAX_MISS; i++) balls += i < MAX_MISS - misses ? '●' : '○';
-  ctx.fillText(balls, W - 20, 36);
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 26px monospace';
+  ctx.fillStyle = timeLeft <= 10 ? C.red : C.ice;
+  ctx.fillText(Math.ceil(timeLeft) + 's', W / 2, 36);
 
-  if (state === 'menu') drawOverlay('FROST HOOPS 🏀', 'Swipe UP fast on the ball to shoot\n3 misses and the run ends · hoop speeds up\nTap to start');
+  if (state === 'menu') drawOverlay('FROST HOOPS 🏀', 'Swipe UP fast on the ball to shoot\n60 seconds · most baskets wins\nTap to start');
   else if (state === 'paused') drawOverlay('PAUSED', 'Tap to resume');
-  else if (state === 'gameover') drawOverlay('GAME OVER', 'Score: ' + score + '   Best: ' + best + '\nStreak: ' + bestStreak + '\nTap to play again');
+  else if (state === 'gameover') drawOverlay('TIME UP!', 'Score: ' + score + '   Best: ' + best + '\nBest streak: ' + bestStreak + '\nTap to play again');
 
   shared.drawParticles(ctx);
   ctx.restore();

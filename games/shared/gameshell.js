@@ -13,7 +13,7 @@ const GAMES = [
   { id: 'snake', name: 'Frost Snake', desc: 'Grid arena, frost trails, power-ups, obstacles', icon: '🐍', path: '../frost-snake/game.js' },
   { id: 'asteroids', name: 'Frost Asteroids', desc: 'Twin-stick shooter, bosses, power-ups', icon: '☄️', path: '../frost-asteroids/game.js' },
   { id: 'pinball', name: 'Frost Pinball', desc: 'Full table — flippers, bumpers, ramps, multiball', icon: '🎱', path: '../frost-pinball/game.js' },
-  { id: 'hoops', name: 'Frost Hoops', desc: 'Messenger-style solo hoops — swipe up, 3 misses', icon: '🏀', path: '../frost-hoops/game.js' },
+  { id: 'hoops', name: 'Frost Hoops', desc: 'Messenger-style solo hoops — 60s shootout', icon: '🏀', path: '../frost-hoops/game.js' },
 ];
 
 let currentGame = null;
