@@ -44,6 +44,7 @@ let rimQuietUntil = 0;
 let dragTrail = null; // [{x,y,t}] while aiming
 let flightMinY = 0;
 let resolved = true;
+let hasShot = false; // clock starts on first shot, not on boot
 
 function rimRx() { return 72 / diffMult(); }
 function swaySpeed() { return (0.5 + score * 0.05) * diffMult(); }
@@ -52,6 +53,7 @@ function hoopY() { return 150; }
 
 function reset() {
   score = 0; streak = 0; bestStreak = 0; timeLeft = GAME_TIME;
+  hasShot = false;
   swayT = 0; netAnim = 0;
   popups = [];
   spawnBall();
@@ -183,13 +185,15 @@ function onMiss() {
 function update(dt) {
   if (state !== 'ready' && state !== 'aiming' && state !== 'flying') return;
 
-  /* clock — the run ends at zero */
-  timeLeft -= dt;
-  if (timeLeft <= 0) {
-    timeLeft = 0;
-    state = 'gameover';
-    buzzerSnd();
-    return;
+  /* clock — the run ends at zero (starts on first shot) */
+  if (hasShot) {
+    timeLeft -= dt;
+    if (timeLeft <= 0) {
+      timeLeft = 0;
+      state = 'gameover';
+      buzzerSnd();
+      return;
+    }
   }
 
   /* hoop sway */
@@ -570,6 +574,7 @@ function onPointerUp() {
   flightMinY = ball.y;
   resolved = false;
   ball.settle = 0;
+  hasShot = true;
   state = 'flying';
   shared.tone({ f0: 300, f1: 600, dur: 0.1, vol: 0.2, type: 'triangle' });
 }
@@ -614,7 +619,7 @@ export function init(c, sh) {
   canvas.addEventListener('pointercancel', onPointerUp);
   best = shared.getBestScore('hoops') || 0;
   reset();
-  state = 'menu';
+  state = 'ready'; // boot straight into play — no tap-to-start gate
   running = true;
   lastTs = 0;
   animationId = requestAnimationFrame(loop);
