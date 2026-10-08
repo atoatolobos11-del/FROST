@@ -310,13 +310,16 @@ function drawBallShape() {
   ctx.translate(ball.x, ball.y);
   ctx.rotate(ball.rot || 0);
   /* leather body with darkened edge */
+  ctx.shadowColor = 'rgba(255,150,60,0.8)';
+  ctx.shadowBlur = 14;
   const grd = ctx.createRadialGradient(-5, -6, 2, 0, 0, BALL_R + 2);
-  grd.addColorStop(0, '#f7b25e');
-  grd.addColorStop(0.55, '#e07f2e');
-  grd.addColorStop(0.85, '#a34a17');
-  grd.addColorStop(1, '#6e2c0c');
+  grd.addColorStop(0, '#ffcf7d');
+  grd.addColorStop(0.55, '#f0973a');
+  grd.addColorStop(0.85, '#b45a1c');
+  grd.addColorStop(1, '#7e3710');
   ctx.fillStyle = grd;
   ctx.beginPath(); ctx.arc(0, 0, BALL_R, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
   /* pebbling */
   ctx.fillStyle = 'rgba(90,35,8,0.35)';
   PEBBLES.forEach(function (p) {
