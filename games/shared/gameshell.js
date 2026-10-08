@@ -292,6 +292,52 @@ btnFullscreen.addEventListener('click', toggleFullscreen);
 btnSound.addEventListener('click', toggleMute);
 btnPause.addEventListener('click', togglePause);
 
+/* ─── Leaderboards (one top-10 per game, local) ─── */
+const boardOverlay = document.getElementById('board-overlay');
+const boardTabs = document.getElementById('boardTabs');
+const boardList = document.getElementById('boardList');
+const boardName = document.getElementById('boardName');
+let boardGame = 'breakout';
+function esc(s) { return String(s).replace(/[<>&"]/g, ''); }
+function renderBoard() {
+  if (!boardTabs || !boardList) return;
+  boardTabs.innerHTML = '';
+  GAMES.filter((g) => !g.standalone).concat(GAMES.filter((g) => g.standalone)).forEach((g) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip-btn' + (g.id === boardGame ? ' active' : '');
+    b.textContent = g.icon + ' ' + g.name.replace('Frost ', '');
+    b.addEventListener('click', () => { boardGame = g.id; renderBoard(); });
+    boardTabs.appendChild(b);
+  });
+  const rows = FrostShared.getBoard(boardGame);
+  if (!rows.length) {
+    boardList.innerHTML = '<li class="empty">No scores yet — finish a run to post one.</li>';
+    return;
+  }
+  boardList.innerHTML = rows.map((e, i) =>
+    '<li><span class="rank">' + (i + 1) + '</span><span class="who">' + esc(e.n) +
+    (e.m ? ' · ' + esc(e.m) : '') + '</span><span class="pts">' +
+    Number(e.s).toLocaleString() + '</span><span class="when">' + esc(e.d || '') + '</span></li>'
+  ).join('');
+}
+const btnBoard = document.getElementById('btnBoard');
+if (btnBoard) btnBoard.addEventListener('click', () => {
+  if (boardName) boardName.value = FrostShared.getPlayerName();
+  renderBoard();
+  if (boardOverlay) boardOverlay.hidden = false;
+});
+const btnBoardClose = document.getElementById('btnBoardClose');
+if (btnBoardClose) btnBoardClose.addEventListener('click', () => {
+  if (boardOverlay) boardOverlay.hidden = true;
+});
+if (boardOverlay) boardOverlay.addEventListener('click', (e) => {
+  if (e.target === boardOverlay) boardOverlay.hidden = true;
+});
+if (boardName) boardName.addEventListener('change', () => {
+  boardName.value = FrostShared.setPlayerName(boardName.value);
+  renderBoard();
+});
 /* ─── Global settings panel (one store for every game) ─── */
 const btnSettings = document.getElementById('btnSettings');
 const settingsOverlay = document.getElementById('settings-overlay');

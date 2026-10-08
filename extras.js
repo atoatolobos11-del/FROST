@@ -37,8 +37,7 @@
   /* ---------- meta / stats ---------- */
   const META_KEY = 'frost-breakout:meta';
   function getMeta() {
-    const m = loadJSON(META_KEY, {});
-    return {
+    const m = loadJSON(META_KEY, {});    return {
       maxLevel: m.maxLevel || 1,
       totalRuns: m.totalRuns || 0,
       totalBricks: m.totalBricks || 0,
@@ -54,6 +53,29 @@
   }
   function setMeta(m) { saveJSON(META_KEY, m); return m; }
   function bumpMeta(fn) { const m = getMeta(); fn(m); return setMeta(m); }
+
+  /* ---------- breakout leaderboard (same store as the arcade shell) ---------- */
+  const BOARD_KEY = 'frost-arcade:board:breakout';
+  function playerName() {
+    try { return (localStorage.getItem('frost-arcade:player') || 'YOU').slice(0, 12) || 'YOU'; }
+    catch (e) { return 'YOU'; }
+  }
+  function getBreakoutBoard() {
+    const arr = loadJSON(BOARD_KEY, []);
+    if (!Array.isArray(arr)) return [];
+    return arr.filter((e) => e && typeof e.s === 'number').sort((a, b) => b.s - a.s).slice(0, 10);
+  }
+  function recordBreakoutBoard(score, mode) {
+    score = Math.round(Number(score) || 0);
+    if (score <= 0) return 0;
+    const board = getBreakoutBoard();
+    const entry = { n: playerName(), s: score, d: new Date().toISOString().slice(0, 10), m: String(mode || 'classic').slice(0, 16) };
+    board.push(entry);
+    board.sort((a, b) => b.s - a.s);
+    const rank = board.indexOf(entry) + 1;
+    saveJSON(BOARD_KEY, board.slice(0, 10));
+    return rank <= 10 ? rank : 0;
+  }
 
   /* ---------- achievements ---------- */
   const ACH_KEY = 'frost-breakout:ach';
@@ -161,6 +183,19 @@
     set('stDaily', (m.perModeBest.daily || 0).toLocaleString());
     set('stEndless', (m.perModeBest.endless || 0).toLocaleString());
     set('stCustom', (m.perModeBest.custom || 0).toLocaleString());
+    const bl = $('stBoard');
+    if (bl) {
+      const top = getBreakoutBoard().slice(0, 5);
+      if (!top.length) {
+        bl.innerHTML = '<li class="board-empty" style="border:0;background:none">No runs yet — finish a game to post a score.</li>';
+      } else {
+        bl.innerHTML = top.map((e, i) =>
+          '<li><span class="rank">' + (i + 1) + '</span><span class="who">' +
+          String(e.n).replace(/[<>&"]/g, '') + (e.m && e.m !== 'classic' ? ' · ' + String(e.m).replace(/[<>&"]/g, '') : '') +
+          '</span><span class="pts">' + Number(e.s).toLocaleString() + '</span></li>'
+        ).join('');
+      }
+    }
   }
   function renderAch() {
     const host = $('achList');
@@ -279,6 +314,7 @@
         if (g) m.bestComboEver = Math.max(m.bestComboEver || 0, g.bestCombo || 0);
         if (mode === 'daily') m.lastDaily = new Date().toISOString().slice(0, 10);
       });
+      recordBreakoutBoard(score, mode);
       if (mode === 'classic' && d.level >= 8) { /* victory path handles champion */ }
       try {
         const key = 'frost-arcade:breakout:best';

@@ -41,6 +41,9 @@
       <button type="button" class="icon-btn" id="btnSettings" title="Settings" aria-label="Open settings">
         <span class="ico-settings">⚙</span>
       </button>
+      <button type="button" class="icon-btn" id="btnBoard" title="Leaderboards" aria-label="Open leaderboards">
+        <span class="ico-board">🏆</span>
+      </button>
       <button type="button" class="icon-btn" id="btnFullscreen" title="Fullscreen (F)" aria-label="Toggle fullscreen" aria-pressed="false">
         <span class="ico-fullscreen">↗</span>
       </button>
@@ -69,6 +72,18 @@
 
   <section id="game-host" class="game-host" hidden></section>
   <div class="touch-controls" id="touchControls" hidden></div>
+
+  <section id="board-overlay" class="settings-overlay" hidden>
+    <div class="settings-panel board-panel" role="dialog" aria-label="Leaderboards">
+      <h2 class="settings-title">Leaderboards 🏆</h2>
+      <label class="set-row"><span>Player name</span>
+        <input type="text" id="boardName" maxlength="12" class="name-input" />
+      </label>
+      <div class="board-tabs" id="boardTabs" role="tablist" aria-label="Games"></div>
+      <ol class="arcade-board" id="boardList"></ol>
+      <div class="btn-row"><button type="button" class="done-btn" id="btnBoardClose">Done</button></div>
+    </div>
+  </section>
 
   <section id="settings-overlay" class="settings-overlay" hidden>
     <div class="settings-panel" role="dialog" aria-label="Arcade settings">

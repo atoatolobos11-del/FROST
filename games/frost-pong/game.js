@@ -94,8 +94,8 @@ function scorePoint(side) {
     speed: 250, life: 0.8, size: 4, gravity: 80
   });
   kick(12);
-  if (left.score >= WIN_SCORE) { winner = 'left'; state = 'gameover'; }
-  else if (right.score >= WIN_SCORE) { winner = 'right'; state = 'gameover'; }
+  if (left.score >= WIN_SCORE) { winner = 'left'; state = 'gameover'; shared.recordBoard('pong', Math.max(left.score, right.score)); }
+  else if (right.score >= WIN_SCORE) { winner = 'right'; state = 'gameover'; shared.recordBoard('pong', Math.max(left.score, right.score)); }
   else { resetBall(); }
 }
 

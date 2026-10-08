@@ -274,7 +274,7 @@ export function destroy() {
       // Out of bounds (bottom)
       if (ball.y > H + 50) {
         ball.lost = true; ballsInPlay--;
-        if (ballsInPlay <= 0) { state = 'gameover'; shared.tone({ f0: 100, f1: 60, dur: 0.5, vol: 0.4, type: 'sawtooth' }); }
+        if (ballsInPlay <= 0) { state = 'gameover'; shared.recordBoard('pinball', score); shared.tone({ f0: 100, f1: 60, dur: 0.5, vol: 0.4, type: 'sawtooth' }); }
       }
     });
 

@@ -192,6 +192,7 @@ function update(dt) {
     if (timeLeft <= 0) {
       timeLeft = 0;
       state = 'gameover';
+      shared.recordBoard('hoops', score);
       buzzerSnd();
       return;
     }

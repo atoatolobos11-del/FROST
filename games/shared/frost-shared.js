@@ -264,6 +264,58 @@ export function saveScore(gameKey, score) {
   } catch (e) { /* private mode */ }
 }
 
+export function getPlayerName() {
+  try { return (localStorage.getItem(STORAGE_PREFIX + 'player') || 'YOU').slice(0, 12) || 'YOU'; }
+  catch (e) { return 'YOU'; }
+}
+
+export function setPlayerName(name) {
+  const clean = String(name || 'YOU').replace(/\s+/g, ' ').trim().slice(0, 12) || 'YOU';
+  try { localStorage.setItem(STORAGE_PREFIX + 'player', clean); } catch (e) { /* private mode */ }
+  return clean;
+}
+
+const BOARD_MAX = 10;
+
+function boardKey(gameKey) { return STORAGE_PREFIX + 'board:' + gameKey; }
+
+export function getBoard(gameKey) {
+  try {
+    const raw = localStorage.getItem(boardKey(gameKey));
+    const arr = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter((e) => e && typeof e.s === 'number')
+      .sort((a, b) => b.s - a.s)
+      .slice(0, BOARD_MAX);
+  } catch (e) { return []; }
+}
+
+/* Insert a score; returns 1-based rank, or 0 when it didn't make the board. */
+export function recordBoard(gameKey, score, extra) {
+  score = Math.round(Number(score) || 0);
+  if (score <= 0) return 0;
+  const board = getBoard(gameKey);
+  // seed from the legacy best so long-time players keep their record
+  if (!board.length) {
+    try {
+      const legacy = parseInt(localStorage.getItem(STORAGE_PREFIX + gameKey + ':best'), 10) || 0;
+      if (legacy > 0 && legacy !== score) board.push({ n: getPlayerName(), s: legacy, d: new Date().toISOString().slice(0, 10) });
+    } catch (e) { /* ignore */ }
+  }
+  const entry = {
+    n: getPlayerName(),
+    s: score,
+    d: new Date().toISOString().slice(0, 10),
+  };
+  if (extra) entry.m = String(extra).slice(0, 16);
+  board.push(entry);
+  board.sort((a, b) => b.s - a.s);
+  const rank = board.indexOf(entry) + 1;
+  try { localStorage.setItem(boardKey(gameKey), JSON.stringify(board.slice(0, BOARD_MAX))); } catch (e) { /* private mode */ }
+  return rank <= BOARD_MAX ? rank : 0;
+}
+
 export function getBestScore(gameKey) {
   try {
     return parseInt(localStorage.getItem(STORAGE_PREFIX + gameKey + ':best'), 10) || 0;

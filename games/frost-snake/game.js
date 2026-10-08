@@ -307,6 +307,7 @@ export function onTouchControl(name, on) {
   function gameOver() {
     state = 'gameover';
     kick(15);
+    shared.recordBoard('snake', score);
     shared.tone({ f0: 150, f1: 60, dur: 0.5, vol: 0.4, type: 'sawtooth' });
     shared.spawnParticles({
       x: snake[0].x * GRID + GRID / 2, y: snake[0].y * GRID + GRID / 2,

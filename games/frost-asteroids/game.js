@@ -355,7 +355,7 @@ export function destroy() { running = false; if (animationId) cancelAnimationFra
     lives--; shipInvuln = 2; ship.blink = 2; kick(12); flash(0.5);
     shared.tone({ f0: 100, f1: 60, dur: 0.4, vol: 0.4, type: 'sawtooth' });
     shared.spawnParticles({ x: ship.x, y: ship.y, count: 30, color: C.red, speed: 250, life: 0.8, size: 5 });
-    if (lives <= 0) { state = 'gameover'; shared.tone({ f0: 120, f1: 50, dur: 0.8, vol: 0.5, type: 'sawtooth' }); }
+    if (lives <= 0) { state = 'gameover'; shared.recordBoard('asteroids', score); shared.tone({ f0: 120, f1: 50, dur: 0.8, vol: 0.5, type: 'sawtooth' }); }
     else { ship.x = W/2; ship.y = H/2; ship.vx = ship.vy = 0; }
   }
 
