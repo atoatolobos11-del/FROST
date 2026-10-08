@@ -17,6 +17,7 @@
   let bumpers = [], walls = [], ramps = [], targets = [], lanes = [];
   let score = 0, highScore = 0, ballsInPlay = 0, maxBalls = 3, multiball = false;
   let state = 'menu', shake = 0, plunger = { pulled: 0, charging: false };
+  let helpFrom = 'menu'; // state to return to from help
   let bonuses = { leftLane: false, rightLane: false, centerTarget: 0, spinner: 0 };
 
   /* global arcade settings */
@@ -66,6 +67,10 @@ export function destroy() {
       if (state === 'playing') state = 'paused';
       else if (state === 'paused') state = 'playing';
     }
+    if (c === 'KeyH') {
+      if (state === 'help') state = helpFrom;
+      else if (state === 'playing' || state === 'paused' || state === 'menu' || state === 'gameover') { helpFrom = state; state = 'help'; }
+    }
     if (c === 'ArrowUp' || c === 'ArrowDown') e.preventDefault();
   }
   function onKeyUp(e) {
@@ -86,7 +91,11 @@ export function destroy() {
   }
   function onTouchDown(e) {
     const p = canvasPos(e);
-    if (state === 'menu') { launchBall(0.8); return; }
+    if (state === 'help') { state = helpFrom; return; }
+    if (state === 'menu') {
+      if (p.y < H * 0.35) { helpFrom = 'menu'; state = 'help'; return; }
+      launchBall(0.8); return;
+    }
     if (state === 'gameover') { reset(); return; }
     if (p.x > W - 140 && ballsInPlay === 0) { launchBall(0.8); return; }
     if (p.x < W / 2) flippers.left.up = true; else flippers.right.up = true;
@@ -100,11 +109,13 @@ export function destroy() {
   export function onTouchControl(name, on) {
     if (name === 'plunge') {
       if (!on) return;
+      if (state === 'help') { state = helpFrom; return; }
       if (state === 'gameover') { reset(); return; }
       if (ballsInPlay === 0) launchBall(0.8);
       return;
     }
     if (state === 'menu' && on) return;
+    if (state === 'help' && on) { state = helpFrom; return; }
     if (name === 'left') flippers.left.up = on;
     else if (name === 'right') flippers.right.up = on;
   }
@@ -416,9 +427,10 @@ export function destroy() {
     ctx.fillStyle = C.amber; ctx.fillText('Targets: ' + targets.filter(t=>!t.down).length + '/5', 20, 195);
 
     // State overlays
-    if (state === 'menu') drawOverlay('FROST PINBALL', '←/A = Left flipper · →/D = Right flipper\nHold SPACE to pull plunger · Release to launch\nLight all lanes for MULTIBALL\nComplete FROST targets for bonus');
-    else if (state === 'paused') drawOverlay('PAUSED', 'P to resume');
-    else if (state === 'gameover') drawOverlay('GAME OVER', `Final Score: ${score.toLocaleString()}\nBest: ${highScore.toLocaleString()}\nSpace for new game`);
+    if (state === 'menu') drawOverlay('FROST PINBALL', '←/A = Left flipper · →/D = Right flipper\nHold SPACE to pull plunger · Release to launch\nH = HOW TO PLAY · tap top = help\nLight all lanes for MULTIBALL');
+    else if (state === 'help') drawHelp();
+    else if (state === 'paused') drawOverlay('PAUSED', 'P to resume · H for help');
+    else if (state === 'gameover') drawOverlay('GAME OVER', `Final Score: ${score.toLocaleString()}\nBest: ${highScore.toLocaleString()}\nSpace for new game · H for help`);
 
     shared.drawParticles(ctx);
     ctx.restore();
@@ -455,6 +467,37 @@ export function destroy() {
     ctx.fillStyle = C.ice; ctx.fillText(t, W/2, H/2 - 40);
     ctx.font = '17px Segoe UI, sans-serif'; ctx.fillStyle = C.ice3;
     s.split('\n').forEach((l,i) => ctx.fillText(l, W/2, H/2 + 10 + i*24));
+  }
+
+  function drawHelp() {
+    ctx.fillStyle = 'rgba(2,6,13,0.95)'; ctx.fillRect(0,0,W,H);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = C.gold;
+    ctx.font = 'bold 34px Segoe UI, sans-serif';
+    ctx.fillText('HOW TO PLAY', W/2, 120);
+    const rows = [
+      ['t', '— FLIPPERS —'],
+      ['', '← / A  =  left flipper     → / D  =  right flipper'],
+      ['', 'Touch: tap LEFT / RIGHT half of the table'],
+      ['t', '— LAUNCH —'],
+      ['', 'Hold SPACE to charge · release to fire'],
+      ['', 'Touch: tap the plunger lane (far right)'],
+      ['t', '— RULES —'],
+      ['', "Don't let the ball drain past the flippers"],
+      ['', 'Bumpers 100 · Targets 500 · Lanes 1000'],
+      ['', 'Light every lane = MULTIBALL · Ramps 5000'],
+      ['t', '— OTHER KEYS —'],
+      ['', 'P = pause · H = this screen · M = mute'],
+      ['g', 'H or tap anywhere to go back'],
+    ];
+    ctx.font = '17px Segoe UI, sans-serif';
+    rows.forEach(function (r, i) {
+      const y = 190 + i * 34;
+      if (r[0] === 't') { ctx.fillStyle = C.ice3; ctx.font = 'bold 17px Segoe UI, sans-serif'; }
+      else if (r[0] === 'g') { ctx.fillStyle = C.gold; ctx.font = 'bold 17px Segoe UI, sans-serif'; }
+      else { ctx.fillStyle = C.ice2; ctx.font = '17px Segoe UI, sans-serif'; }
+      ctx.fillText(r[1], W/2, y);
+    });
   }
 
   function rrPath(g, x, y, w, h, r) {
