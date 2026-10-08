@@ -13,7 +13,7 @@ const GAMES = [
   { id: 'snake', name: 'Frost Snake', desc: 'Grid arena, frost trails, power-ups, obstacles', icon: '🐍', path: '../frost-snake/game.js' },
   { id: 'asteroids', name: 'Frost Asteroids', desc: 'Twin-stick shooter, bosses, power-ups', icon: '☄️', path: '../frost-asteroids/game.js' },
   { id: 'pinball', name: 'Frost Pinball', desc: 'Full table — flippers, bumpers, ramps, multiball', icon: '🎱', path: '../frost-pinball/game.js' },
-  { id: 'hoops', name: 'Frost Hoops', desc: 'Flick basketball shootout — 60s, streaks, centered hoop', icon: '🏀', path: '../frost-hoops/game.js' },
+  { id: 'hoops', name: 'Frost Hoops', desc: '1v1 arcade basketball — outscore the CPU', icon: '🏀', path: '../frost-hoops/game.js' },
 ];
 
 let currentGame = null;
@@ -67,6 +67,16 @@ const TOUCH_LAYOUTS = {
     { align: 'left', buttons: [{ name: 'left', label: '◀ FLIPPER', cls: 'wide' }]},
     { align: 'right', buttons: [{ name: 'plunge', label: '●', sub: 'PLUNGE' }]},
     { align: 'right', buttons: [{ name: 'right', label: 'FLIPPER ▶', cls: 'wide' }]},
+  ],
+  hoops: [
+    { align: 'left', buttons: [
+      { name: 'left', label: '◀' },
+      { name: 'right', label: '▶' },
+    ]},
+    { align: 'right', buttons: [
+      { name: 'jump', label: '▲', sub: 'JUMP' },
+      { name: 'shoot', label: '●', sub: 'SHOOT' },
+    ]},
   ],
 };
 
